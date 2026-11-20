@@ -62,11 +62,22 @@ pipeline {
                 sh '''
                     set -e
 
+                    echo "=================================================="
+                    echo "=== DIAGNOSTIK: CEK ISI WORKSPACE ==="
+                    echo "=================================================="
+                    echo "=== Direktori Saat Ini ==="
+                    pwd
+                    echo "=== Daftar File & Folder ==="
+                    ls -la
+                    echo "=== Lokasi File .go ==="
+                    find . -name "*.go" -type f
+                    echo "=================================================="
+
                     echo "=== Go Runtime ==="
                     go version
 
-                    # Masuk ke folder server tempat go.mod berada
-                    cd server
+                    # SEMENTARA: Perintah cd server dihapus agar tidak error
+                    # cd server 
 
                     if [ ! -f /go-cache/mod/.stamp ] \
                         || [ go.mod -nt /go-cache/mod/.stamp ] \
@@ -107,15 +118,12 @@ pipeline {
 
                     echo "=== Running Go Tests with Statement Coverage ==="
                     
-                    # Masuk ke folder server tempat file test berada
-                    cd server
+                    # SEMENTARA: Perintah cd server dihapus
+                    # cd server
                     
                     go test -v -coverprofile=coverage.out -covermode=atomic ./...
                     go tool cover -func=coverage.out
                     
-                    # Pindahkan file coverage ke root agar bisa di-archive
-                    mv coverage.out ../coverage.out
-
                     echo "=== Tests Passed ==="
                 '''
             }
@@ -153,15 +161,11 @@ pipeline {
 
                     echo "=== Compiling Standalone Linux Binary ==="
                     
-                    # Masuk ke folder server tempat main.go berada
-                    cd server
+                    # SEMENTARA: Perintah cd server dihapus
+                    # cd server
                     
-                    # Build dan taruh binary di root workspace
-                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o ../server .
+                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server .
                     
-                    # Kembali ke root
-                    cd ..
-
                     echo "=== Binary Created ==="
                     ls -lh server
                     file server || true
