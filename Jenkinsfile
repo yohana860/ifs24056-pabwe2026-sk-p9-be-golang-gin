@@ -62,22 +62,8 @@ pipeline {
                 sh '''
                     set -e
 
-                    echo "=================================================="
-                    echo "=== DIAGNOSTIK: CEK ISI WORKSPACE ==="
-                    echo "=================================================="
-                    echo "=== Direktori Saat Ini ==="
-                    pwd
-                    echo "=== Daftar File & Folder ==="
-                    ls -la
-                    echo "=== Lokasi File .go ==="
-                    find . -name "*.go" -type f
-                    echo "=================================================="
-
                     echo "=== Go Runtime ==="
                     go version
-
-                    # SEMENTARA: Perintah cd server dihapus agar tidak error
-                    # cd server 
 
                     if [ ! -f /go-cache/mod/.stamp ] \
                         || [ go.mod -nt /go-cache/mod/.stamp ] \
@@ -118,12 +104,10 @@ pipeline {
 
                     echo "=== Running Go Tests with Statement Coverage ==="
                     
-                    # SEMENTARA: Perintah cd server dihapus
-                    # cd server
-                    
+                    # Jalankan test di semua sub-direktori
                     go test -v -coverprofile=coverage.out -covermode=atomic ./...
                     go tool cover -func=coverage.out
-                    
+
                     echo "=== Tests Passed ==="
                 '''
             }
@@ -161,11 +145,9 @@ pipeline {
 
                     echo "=== Compiling Standalone Linux Binary ==="
                     
-                    # SEMENTARA: Perintah cd server dihapus
-                    # cd server
-                    
-                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server .
-                    
+                    # Gunakan ./... agar Jenkins mencari file main.go di seluruh folder
+                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./...
+
                     echo "=== Binary Created ==="
                     ls -lh server
                     file server || true
