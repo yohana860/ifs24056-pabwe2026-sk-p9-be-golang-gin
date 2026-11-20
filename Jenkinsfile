@@ -145,10 +145,14 @@ pipeline {
 
                     echo "=== Compiling Standalone Linux Binary ==="
                     
-                    # Gunakan ./... agar Jenkins mencari file main.go di seluruh folder
-                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./...
+                    # Masuk ke folder server (tempat main.go berada)
+                    cd server
+                    
+                    # Build package di folder ini saja, output ke root
+                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o ../server .
 
                     echo "=== Binary Created ==="
+                    cd ..
                     ls -lh server
                     file server || true
                 '''
