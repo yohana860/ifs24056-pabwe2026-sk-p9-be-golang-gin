@@ -65,6 +65,9 @@ pipeline {
                     echo "=== Go Runtime ==="
                     go version
 
+                    # Masuk ke folder server tempat go.mod berada
+                    cd server
+
                     if [ ! -f /go-cache/mod/.stamp ] \
                         || [ go.mod -nt /go-cache/mod/.stamp ] \
                         || [ go.sum -nt /go-cache/mod/.stamp ]; then
@@ -103,10 +106,15 @@ pipeline {
                     set -e
 
                     echo "=== Running Go Tests with Statement Coverage ==="
+                    
+                    # Masuk ke folder server tempat file test berada
+                    cd server
+                    
                     go test -v -coverprofile=coverage.out -covermode=atomic ./...
-
-                    echo "=== Coverage Summary by Function ==="
                     go tool cover -func=coverage.out
+                    
+                    # Pindahkan file coverage ke root agar bisa di-archive
+                    mv coverage.out ../coverage.out
 
                     echo "=== Tests Passed ==="
                 '''
@@ -144,7 +152,15 @@ pipeline {
                     set -e
 
                     echo "=== Compiling Standalone Linux Binary ==="
-                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server .
+                    
+                    # Masuk ke folder server tempat main.go berada
+                    cd server
+                    
+                    # Build dan taruh binary di root workspace
+                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o ../server .
+                    
+                    # Kembali ke root
+                    cd ..
 
                     echo "=== Binary Created ==="
                     ls -lh server
