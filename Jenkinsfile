@@ -130,11 +130,7 @@ pipeline {
                     set -e
 
                     echo "=== Compiling Standalone Linux Binary ==="
-                    if [ -f main.go ]; then
-                        CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server .
-                    else
-                        CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./cmd/server
-                    fi
+                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server .
 
                     echo "=== Binary Created ==="
                     ls -lh server
