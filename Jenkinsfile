@@ -1,74 +1,579 @@
-// Quality gate Delcom Blog (backend Go + frontend React + embed + binary).
-// Credential: simpan OPENAI_KEY di Jenkins Credentials (Secret text, id: openai-key).
 pipeline {
-  agent any
-  options { timestamps(); timeout(time: 30, unit: 'MINUTES') }
-  parameters {
-    string(name: 'FE_REPO_URL', defaultValue: 'https://github.com/auxtern/REPO-FRONTEND.git', description: 'URL repo frontend React pasangan')
-    string(name: 'FE_BRANCH', defaultValue: 'main', description: 'Branch frontend')
-  }
-  environment {
-    GOFLAGS = '-mod=mod'
-    APP_ENV = 'test'
-    APP_PORT = '8081'
-    DB_HOST = '127.0.0.1'
-    DB_PORT = '5432'
-    DB_DATABASE = 'pabwe_p9_blog'
-    DB_USERNAME = 'postgres'
-    DB_PASSWORD = 'postgres'
-    APP_KEY = 'jenkins_secret_key_super_secure_2026_random_string_32chars'
-  }
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-        dir('frontend') { git url: params.FE_REPO_URL, branch: params.FE_BRANCH }
-      }
+
+    agent any
+
+    options {
+        timestamps()
+        skipDefaultCheckout(true)
+        // Stop later stages if a publisher marks the build UNSTABLE/FAILURE mid-run
+        skipStagesAfterUnstable()
     }
-    stage('Setup Tools') {
-      steps { sh 'go version && node --version && npm --version' }
-    }
-    stage('Setup PostgreSQL 17') {
-      steps { sh 'docker rm -f pg17-ci || true; docker run -d --name pg17-ci -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=pabwe_p9_blog -p 5432:5432 postgres:17; for i in $(seq 1 30); do docker exec pg17-ci pg_isready -U postgres && break; sleep 1; done' }
-    }
-    stage('Backend: dependencies & format') {
-      steps {
-        sh 'go mod download'
-        sh 'test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)'
-        sh 'go vet ./...'
-      }
-    }
-    stage('Backend: tests & 100% coverage') {
-      steps {
-        sh 'go test ./... -coverprofile=coverage.out'
-        sh 'go tool cover -func=coverage.out | tee coverage.txt'
-        sh './scripts/check-coverage.sh coverage.out'
-      }
-    }
-    stage('Frontend: lint, tests & 100% coverage') {
-      steps {
-        dir('frontend') {
-          sh 'npm ci'
-          sh 'npm run lint'
-          sh 'npm run test -- --coverage'   // threshold 100% di vite.config.js => gagal bila kurang
+
+    stages {
+
+        // ============================================================
+        // CHECKOUT (BACKEND & FRONTEND)
+        // ============================================================
+        stage('Checkout') {
+            agent {
+                docker {
+                    image 'alpine:3.21'
+                    reuseNode true
+                }
+            }
+
+            steps {
+                // 1. Checkout Repositori Backend (Repositori Utama Job ini)
+                echo "=== Checking out Backend Repository ==="
+                checkout scm
+
+                // 2. Checkout Repositori Frontend secara manual
+                echo "=== Checking out Frontend Repository ==="
+                dir('frontend') {
+                    // Hapus folder frontend jika sudah ada dari build sebelumnya agar bersih
+                    deleteDir() 
+                    
+                    // Ganti URL dan credentialsId sesuai kebutuhan Anda
+                    git url: 'https://github.com/yohana860/ifs24056-pabwe2026-sk-p9-fe-reactjs.git',
+                        branch: 'main', 
+                        credentialsId: 'github-yohana860' 
+                }
+            }
         }
-      }
-    }
-    stage('Build: frontend -> embed -> binary') {
-      steps { sh 'FE_DIR=frontend ./scripts/build.sh' }
-    }
-    stage('Binary smoke test') {
-      steps {
-        withCredentials([string(credentialsId: 'openai-key', variable: 'OPENAI_KEY')]) {
-          sh './scripts/smoke.sh'
+
+        // ============================================================
+        // INSTALL DEPENDENCIES
+        // ============================================================
+        stage('Install Dependencies') {
+            agent {
+                docker {
+                    image 'golang:1.27-alpine'
+                    reuseNode true
+                    args '''
+                        -e HOME=/tmp
+                        -e GOCACHE=/go-cache/build
+                        -e GOMODCACHE=/go-cache/mod
+                        -v cicd-go-cache:/go-cache
+                    '''
+                }
+            }
+
+            steps {
+                sh '''
+                    set -e
+
+                    echo "=== Go Runtime ==="
+                    go version
+
+                    if [ ! -f /go-cache/mod/.stamp ] \
+                        || [ go.mod -nt /go-cache/mod/.stamp ] \
+                        || [ go.sum -nt /go-cache/mod/.stamp ]; then
+                        echo "=== Downloading Go Modules ==="
+                        go mod download
+                        go mod verify
+                        touch /go-cache/mod/.stamp
+                    else
+                        echo "=== go.mod/go.sum unchanged, using cached modules ==="
+                    fi
+
+                    echo "=== Go Dependencies Installed ==="
+                '''
+            }
         }
-      }
+
+        // ============================================================
+        // TEST & COVERAGE
+        // ============================================================
+        stage('Test') {
+            agent {
+                docker {
+                    image 'golang:1.27-alpine'
+                    reuseNode true
+                    args '''
+                        -e HOME=/tmp
+                        -e GOCACHE=/go-cache/build
+                        -e GOMODCACHE=/go-cache/mod
+                        -v cicd-go-cache:/go-cache
+                    '''
+                }
+            }
+
+            steps {
+                sh '''
+                    set -e
+
+                    echo "=== Running Go Tests with Statement Coverage ==="
+                    go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+                    echo "=== Coverage Summary by Function ==="
+                    go tool cover -func=coverage.out
+
+                    echo "=== Tests Passed ==="
+                '''
+            }
+
+            post {
+                always {
+                    archiveArtifacts(
+                        artifacts: 'coverage.out',
+                        allowEmptyArchive: true
+                    )
+                }
+            }
+        }
+
+        // ============================================================
+        // BUILD APPLICATION BINARY
+        // ============================================================
+        stage('Build Application') {
+            agent {
+                docker {
+                    image 'golang:1.27-alpine'
+                    reuseNode true
+                    args '''
+                        -e HOME=/tmp
+                        -e GOCACHE=/go-cache/build
+                        -e GOMODCACHE=/go-cache/mod
+                        -v cicd-go-cache:/go-cache
+                    '''
+                }
+            }
+
+            steps {
+                sh '''
+                    set -e
+
+                    echo "=== Compiling Standalone Linux Binary ==="
+                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server .
+
+                    echo "=== Binary Created ==="
+                    ls -lh server
+                    file server || true
+                '''
+            }
+        }
+
+        // ============================================================
+        // TRIVY SECURITY SCAN
+        // ============================================================
+        stage('Trivy Security Scan') {
+            agent {
+                docker {
+                    image 'aquasec/trivy:0.74.0'
+                    reuseNode true
+
+                    args '''
+                        --entrypoint=""
+                        -e HOME=/tmp
+                        -e XDG_CACHE_HOME=/tmp/.cache
+                    '''
+                }
+            }
+
+            steps {
+                sh '''
+                    set -e
+
+                    mkdir -p .trivy-cache || true
+
+                    echo "======================================"
+                    echo "        TRIVY SECURITY SCAN"
+                    echo "======================================"
+
+                    echo "=== Trivy Version ==="
+                    trivy --version
+
+                    echo "=== Trivy Scan ==="
+
+                    trivy fs \
+                        --cache-dir .trivy-cache \
+                        --scanners vuln \
+                        --severity HIGH,CRITICAL \
+                        --format sarif \
+                        --output trivy-results.sarif \
+                        --exit-code 1 \
+                        .
+
+                    echo "=== Trivy Result ==="
+                    ls -lh trivy-results.sarif
+                '''
+            }
+
+            post {
+                always {
+                    recordIssues(
+                        enabledForFailure: true,
+                        failOnError: false,
+                        tools: [
+                            sarif(
+                                id: 'trivy',
+                                name: 'Trivy Security',
+                                pattern: 'trivy-results.sarif'
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+
+        // ============================================================
+        // PACKAGE APPLICATION (PURE SOURCE CODE DARI GITHUB)
+        // ============================================================
+        stage('Package Application') {
+            agent {
+                docker {
+                    image 'alpine:3.21'
+                    reuseNode true
+                    args '-u root'
+                }
+            }
+
+            steps {
+                sh '''
+                    set -e
+
+                    echo "======================================"
+                    echo "       CREATING APPLICATION PACKAGE"
+                    echo "======================================"
+
+                    apk add --no-cache git zip unzip
+
+                    rm -f latest-app.zip
+
+                    git config --global --add safe.directory '*' || true
+
+                    echo "=== Creating Source Code Package (Pure Code from GitHub) ==="
+                    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+                        git archive --format=zip HEAD -o latest-app.zip
+                    else
+                        zip -r latest-app.zip . \
+                            -x ".git/*" \
+                            -x ".env*" \
+                            -x "server" \
+                            -x "server.exe" \
+                            -x "main" \
+                            -x "app" \
+                            -x "*.out" \
+                            -x "*.test" \
+                            -x "*.prof" \
+                            -x "cov*" \
+                            -x "coverage*" \
+                            -x ".trivy-cache/*" \
+                            -x "trivy-results.sarif" \
+                            -x "latest-app.zip" \
+                            -x ".vscode/*" \
+                            -x ".idea/*" \
+                            -x "frontend/node_modules/*" \
+                            -x "frontend/build/*" \
+                            -x "frontend/.git/*"
+                    fi
+
+                    echo "=== Application Package Created ==="
+                    ls -lh latest-app.zip
+
+                    echo "=== Verify .env excluded ==="
+                    if unzip -Z1 latest-app.zip | grep -E '^\\.env$' >/dev/null; then
+                        echo "ERROR: zip masih berisi .env rahasia"
+                        exit 1
+                    fi
+                    echo "OK: file .env tidak ada di zip"
+
+                    echo "=== Verify build binary excluded ==="
+                    if unzip -Z1 latest-app.zip | grep -E '^server$' >/dev/null; then
+                        echo "ERROR: zip masih berisi biner hasil build"
+                        exit 1
+                    fi
+                    echo "OK: biner hasil build tidak disertakan dalam zip"
+
+                    echo "=== Package Content (sample) ==="
+                    unzip -l latest-app.zip | head -n 60
+                '''
+            }
+        }
+
+        // ============================================================
+        // PUBLISH APPLICATION
+        // ============================================================
+        stage('Publish Application') {
+
+            steps {
+
+                // ========================================================
+                // 1. ARCHIVE ARTIFACT KE JENKINS
+                // ========================================================
+
+                archiveArtifacts(
+                    artifacts: 'latest-app.zip',
+                    fingerprint: true,
+                    allowEmptyArchive: false
+                )
+
+                script {
+
+                    // ====================================================
+                    // 2. BUAT IDENTITAS APPLICATION
+                    // ====================================================
+
+                    def appName = env.JOB_NAME
+                        .replaceAll('[^a-zA-Z0-9._-]', '-')
+                        .replaceAll('-+', '-')
+                        .replaceAll('^-|-$', '')
+
+                    def buildId = env.BUILD_NUMBER
+
+                    echo "Application Name: ${appName}"
+                    echo "Build ID: ${buildId}"
+
+                    // ====================================================
+                    // 3. COPY KE USER CONTENT
+                    // ====================================================
+
+                    sh """
+                        set -e
+
+                        echo "======================================"
+                        echo "       PUBLISHING USER CONTENT"
+                        echo "======================================"
+
+                        docker exec cicd-jenkins \\
+                            mkdir -p \\
+                            "/var/jenkins_home/userContent/applications/${appName}/${buildId}"
+
+                        docker cp \\
+                            latest-app.zip \\
+                            "cicd-jenkins:/var/jenkins_home/userContent/applications/${appName}/${buildId}/latest-app.zip"
+
+                        echo "=== Published File ==="
+
+                        docker exec cicd-jenkins \\
+                            ls -lh \\
+                            "/var/jenkins_home/userContent/applications/${appName}/${buildId}/latest-app.zip"
+                    """
+
+                    // ====================================================
+                    // 4. BUAT PUBLIC ARTIFACT URL
+                    // ====================================================
+
+                    def jenkinsBaseUrl = env.BUILD_URL
+                        .substring(0, env.BUILD_URL.indexOf('/job/'))
+                        .replace('localhost', 'host.docker.internal')
+
+                    env.ARTIFACT_URL =
+                        "${jenkinsBaseUrl}/userContent/applications/${appName}/${buildId}/latest-app.zip"
+
+                    echo "======================================"
+                    echo "       APPLICATION PUBLISHED"
+                    echo "======================================"
+
+                    echo "Artifact URL:"
+                    echo "${env.ARTIFACT_URL}"
+                }
+            }
+        }
+
+        // ============================================================
+        // DEPLOY APPLICATION
+        // ============================================================
+        stage('Deploy Application') {
+            agent {
+                docker {
+                    image 'curlimages/curl:8.15.0'
+                    reuseNode true
+                    args '--network cicd-network'
+                }
+            }
+
+            steps {
+                script {
+
+                    echo "=========================================="
+                    echo "       START APPLICATION DEPLOYMENT"
+                    echo "=========================================="
+
+                    echo "Artifact URL:"
+                    echo "${env.ARTIFACT_URL}"
+
+                    // ==================================================
+                    // 1. REQUEST REDEPLOYMENT
+                    // ==================================================
+
+                    echo ""
+                    echo "=== Request Redeployment ==="
+
+                    def redeployResponse = sh(
+                        script: '''
+                            set -e
+
+                            curl -sS --fail-with-body \
+                                -X POST "$URL_REDEPLOY" \
+                                -H "Content-Type: application/json" \
+                                -d "{
+                                    \\"token_access\\": \\"$DEPLOY_TOKEN\\",
+                                    \\"website_id\\": \\"$WEBSITE_ID\\",
+                                    \\"source_url\\": \\"$ARTIFACT_URL\\",
+                                    \\"source_type\\": \\"jenkins\\"
+                                }"
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Redeploy Response:"
+                    echo redeployResponse
+
+                    // ==================================================
+                    // 2. POLLING DEPLOYMENT PROGRESS
+                    // ==================================================
+
+                    echo ""
+                    echo "=== Waiting For Deployment ==="
+
+                    def maxAttempts = 120
+                    def attempt = 0
+                    def deploymentStatus = 'IN_PROGRESS'
+
+                    while (deploymentStatus == 'IN_PROGRESS') {
+
+                        attempt++
+
+                        if (attempt > maxAttempts) {
+                            error(
+                                "Deployment timeout. " +
+                                "Status masih IN_PROGRESS setelah " +
+                                "${maxAttempts} attempts."
+                            )
+                        }
+
+                        sleep time: 5, unit: 'SECONDS'
+
+                        echo ""
+                        echo "=== Checking Deployment Progress (${attempt}/${maxAttempts}) ==="
+
+                        def progressResponse = sh(
+                            script: '''
+                                set -e
+
+                                curl -sS --fail-with-body \
+                                    -X POST "$URL_PROGRESS" \
+                                    -H "Content-Type: application/json" \
+                                    -d "{
+                                        \\"token_access\\": \\"$DEPLOY_TOKEN\\",
+                                        \\"website_id\\": \\"$WEBSITE_ID\\"
+                                    }"
+                            ''',
+                            returnStdout: true
+                        ).trim()
+
+                        echo "Progress Response:"
+                        echo progressResponse
+
+                        // ==================================================
+                        // PARSE JSON
+                        // ==================================================
+
+                        def json = readJSON text: progressResponse
+
+                        deploymentStatus = json?.data?.status
+                            ?.toString()
+                            ?.toUpperCase()
+
+                        if (!deploymentStatus) {
+                            error(
+                                "Response progress tidak memiliki data.status"
+                            )
+                        }
+
+                        echo "Deployment Status: ${deploymentStatus}"
+
+                        // ==================================================
+                        // SUCCESS
+                        // ==================================================
+
+                        if (deploymentStatus == 'SUCCESS') {
+
+                            echo ""
+                            echo "=========================================="
+                            echo "       ✅ DEPLOYMENT SUCCESS"
+                            echo "=========================================="
+
+                            break
+                        }
+
+                        // ==================================================
+                        // FAIL
+                        // ==================================================
+
+                        if (deploymentStatus == 'FAIL') {
+
+                            echo ""
+                            echo "=========================================="
+                            echo "       ❌ DEPLOYMENT FAILED"
+                            echo "=========================================="
+
+                            def deploymentLog =
+                                json?.data?.log
+                                    ?: 'Deployment failed tanpa log.'
+
+                            echo ""
+                            echo "========== DEPLOYMENT LOG =========="
+                            echo deploymentLog
+                            echo "===================================="
+
+                            error(
+                                "Deployment gagal untuk website " +
+                                "${WEBSITE_ID}"
+                            )
+                        }
+
+                        // ==================================================
+                        // OTHER STATUS
+                        // ==================================================
+
+                        echo "Deployment masih berjalan..."
+                    }
+
+                    echo ""
+                    echo "=========================================="
+                    echo "       DEPLOYMENT FINISHED"
+                    echo "=========================================="
+                }
+            }
+        }
     }
-  }
-  post {
-    always {
-      sh 'docker rm -f pg17-ci || true'
-      archiveArtifacts artifacts: 'coverage.out, coverage.txt, bin/server, frontend/coverage/**', allowEmptyArchive: true
+
+    // ================================================================
+    // POST ACTIONS
+    // ================================================================
+    post {
+
+        always {
+            archiveArtifacts(
+                artifacts: 'trivy-results.sarif',
+                allowEmptyArchive: true
+            )
+        }
+
+        success {
+            echo "=========================================="
+            echo "       ✅ PIPELINE SUCCESS"
+            echo "=========================================="
+            echo "Result: ${currentBuild.currentResult}"
+            echo "📦 Artifact: ${env.ARTIFACT_URL ?: '(not published)'}"
+            echo "🚀 Website berhasil dideploy."
+        }
+
+        failure {
+            echo "=========================================="
+            echo "       ❌ PIPELINE FAILED"
+            echo "=========================================="
+            echo "Result: ${currentBuild.currentResult}"
+            echo "Periksa log stage yang merah / Console Output untuk penyebab gagal."
+        }
+
+        unstable {
+            echo "=========================================="
+            echo "       ⚠️ PIPELINE UNSTABLE"
+            echo "=========================================="
+            echo "Result: ${currentBuild.currentResult}"
+        }
     }
-  }
 }
