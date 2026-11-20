@@ -5,15 +5,11 @@ pipeline {
     options {
         timestamps()
         skipDefaultCheckout(true)
-        // Stop later stages if a publisher marks the build UNSTABLE/FAILURE mid-run
         skipStagesAfterUnstable()
     }
 
     stages {
 
-        // ============================================================
-        // CHECKOUT (BACKEND & FRONTEND)
-        // ============================================================
         stage('Checkout') {
             agent {
                 docker {
@@ -23,27 +19,19 @@ pipeline {
             }
 
             steps {
-                // 1. Checkout Repositori Backend (Repositori Utama Job ini)
                 echo "=== Checking out Backend Repository ==="
                 checkout scm
 
-                // 2. Checkout Repositori Frontend secara manual
                 echo "=== Checking out Frontend Repository ==="
                 dir('frontend') {
-                    // Hapus folder frontend jika sudah ada dari build sebelumnya agar bersih
-                    deleteDir() 
-                    
-                    // Ganti URL dan credentialsId sesuai kebutuhan Anda
+                    deleteDir()
                     git url: 'https://github.com/yohana860/ifs24056-pabwe2026-sk-p9-fe-reactjs.git',
-                        branch: 'main', 
-                        credentialsId: 'github-yohana860' 
+                        branch: 'main',
+                        credentialsId: 'github-yohana860'
                 }
             }
         }
 
-        // ============================================================
-        // INSTALL DEPENDENCIES
-        // ============================================================
         stage('Install Dependencies') {
             agent {
                 docker {
@@ -61,7 +49,6 @@ pipeline {
             steps {
                 sh '''
                     set -e
-
                     echo "=== Go Runtime ==="
                     go version
 
@@ -75,15 +62,11 @@ pipeline {
                     else
                         echo "=== go.mod/go.sum unchanged, using cached modules ==="
                     fi
-
                     echo "=== Go Dependencies Installed ==="
                 '''
             }
         }
 
-        // ============================================================
-        // TEST & COVERAGE
-        // ============================================================
         stage('Test') {
             agent {
                 docker {
@@ -101,30 +84,20 @@ pipeline {
             steps {
                 sh '''
                     set -e
-
                     echo "=== Running Go Tests with Statement Coverage ==="
-                    
-                    # Jalankan test di semua sub-direktori
                     go test -v -coverprofile=coverage.out -covermode=atomic ./...
                     go tool cover -func=coverage.out
-
                     echo "=== Tests Passed ==="
                 '''
             }
 
             post {
                 always {
-                    archiveArtifacts(
-                        artifacts: 'coverage.out',
-                        allowEmptyArchive: true
-                    )
+                    archiveArtifacts(artifacts: 'coverage.out', allowEmptyArchive: true)
                 }
             }
         }
 
-        // ============================================================
-        // BUILD APPLICATION BINARY
-        // ============================================================
         stage('Build Application') {
             agent {
                 docker {
@@ -143,31 +116,33 @@ pipeline {
                 sh '''
                     set -e
 
+                    echo "=== Mencari file main.go ==="
+                    find . -name "main.go" -type f
+
                     echo "=== Compiling Standalone Linux Binary ==="
                     
-                    # Masuk ke folder server (tempat main.go berada)
-                    cd server
+                    MAIN_DIR=$(find . -name "main.go" -type f -exec dirname {} \\; | head -n 1)
                     
-                    # Build package di folder ini saja, output ke root
-                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o ../server .
+                    if [ -z "$MAIN_DIR" ]; then
+                        echo "ERROR: Tidak ada file main.go yang ditemukan!"
+                        exit 1
+                    fi
+                    
+                    echo "Membangun dari direktori: $MAIN_DIR"
+                    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server "$MAIN_DIR"
 
                     echo "=== Binary Created ==="
-                    cd ..
                     ls -lh server
                     file server || true
                 '''
             }
         }
 
-        // ============================================================
-        // TRIVY SECURITY SCAN
-        // ============================================================
         stage('Trivy Security Scan') {
             agent {
                 docker {
                     image 'aquasec/trivy:0.74.0'
                     reuseNode true
-
                     args '''
                         --entrypoint=""
                         -e HOME=/tmp
@@ -179,7 +154,6 @@ pipeline {
             steps {
                 sh '''
                     set -e
-
                     mkdir -p .trivy-cache || true
 
                     echo "======================================"
@@ -210,21 +184,12 @@ pipeline {
                     recordIssues(
                         enabledForFailure: true,
                         failOnError: false,
-                        tools: [
-                            sarif(
-                                id: 'trivy',
-                                name: 'Trivy Security',
-                                pattern: 'trivy-results.sarif'
-                            )
-                        ]
+                        tools: [sarif(id: 'trivy', name: 'Trivy Security', pattern: 'trivy-results.sarif')]
                     )
                 }
             }
         }
 
-        // ============================================================
-        // PACKAGE APPLICATION (PURE SOURCE CODE DARI GITHUB)
-        // ============================================================
         stage('Package Application') {
             agent {
                 docker {
@@ -243,9 +208,7 @@ pipeline {
                     echo "======================================"
 
                     apk add --no-cache git zip unzip
-
                     rm -f latest-app.zip
-
                     git config --global --add safe.directory '*' || true
 
                     echo "=== Creating Source Code Package (Pure Code from GitHub) ==="
@@ -253,25 +216,12 @@ pipeline {
                         git archive --format=zip HEAD -o latest-app.zip
                     else
                         zip -r latest-app.zip . \
-                            -x ".git/*" \
-                            -x ".env*" \
-                            -x "server" \
-                            -x "server.exe" \
-                            -x "main" \
-                            -x "app" \
-                            -x "*.out" \
-                            -x "*.test" \
-                            -x "*.prof" \
-                            -x "cov*" \
-                            -x "coverage*" \
-                            -x ".trivy-cache/*" \
-                            -x "trivy-results.sarif" \
-                            -x "latest-app.zip" \
-                            -x ".vscode/*" \
-                            -x ".idea/*" \
-                            -x "frontend/node_modules/*" \
-                            -x "frontend/build/*" \
-                            -x "frontend/.git/*"
+                            -x ".git/*" -x ".env*" -x "server" -x "server.exe" \
+                            -x "main" -x "app" -x "*.out" -x "*.test" -x "*.prof" \
+                            -x "cov*" -x "coverage*" -x ".trivy-cache/*" \
+                            -x "trivy-results.sarif" -x "latest-app.zip" \
+                            -x ".vscode/*" -x ".idea/*" \
+                            -x "frontend/node_modules/*" -x "frontend/build/*" -x "frontend/.git/*"
                     fi
 
                     echo "=== Application Package Created ==="
@@ -297,89 +247,46 @@ pipeline {
             }
         }
 
-        // ============================================================
-        // PUBLISH APPLICATION
-        // ============================================================
         stage('Publish Application') {
-
             steps {
-
-                // ========================================================
-                // 1. ARCHIVE ARTIFACT KE JENKINS
-                // ========================================================
-
-                archiveArtifacts(
-                    artifacts: 'latest-app.zip',
-                    fingerprint: true,
-                    allowEmptyArchive: false
-                )
+                archiveArtifacts(artifacts: 'latest-app.zip', fingerprint: true, allowEmptyArchive: false)
 
                 script {
-
-                    // ====================================================
-                    // 2. BUAT IDENTITAS APPLICATION
-                    // ====================================================
-
-                    def appName = env.JOB_NAME
-                        .replaceAll('[^a-zA-Z0-9._-]', '-')
-                        .replaceAll('-+', '-')
-                        .replaceAll('^-|-$', '')
-
+                    def appName = env.JOB_NAME.replaceAll('[^a-zA-Z0-9._-]', '-').replaceAll('-+', '-').replaceAll('^-|-$', '')
                     def buildId = env.BUILD_NUMBER
 
                     echo "Application Name: ${appName}"
                     echo "Build ID: ${buildId}"
 
-                    // ====================================================
-                    // 3. COPY KE USER CONTENT
-                    // ====================================================
-
                     sh """
                         set -e
-
                         echo "======================================"
                         echo "       PUBLISHING USER CONTENT"
                         echo "======================================"
-
                         docker exec cicd-jenkins \\
                             mkdir -p \\
                             "/var/jenkins_home/userContent/applications/${appName}/${buildId}"
-
                         docker cp \\
                             latest-app.zip \\
                             "cicd-jenkins:/var/jenkins_home/userContent/applications/${appName}/${buildId}/latest-app.zip"
-
                         echo "=== Published File ==="
-
                         docker exec cicd-jenkins \\
                             ls -lh \\
                             "/var/jenkins_home/userContent/applications/${appName}/${buildId}/latest-app.zip"
                     """
 
-                    // ====================================================
-                    // 4. BUAT PUBLIC ARTIFACT URL
-                    // ====================================================
-
-                    def jenkinsBaseUrl = env.BUILD_URL
-                        .substring(0, env.BUILD_URL.indexOf('/job/'))
-                        .replace('localhost', 'host.docker.internal')
-
-                    env.ARTIFACT_URL =
-                        "${jenkinsBaseUrl}/userContent/applications/${appName}/${buildId}/latest-app.zip"
+                    def jenkinsBaseUrl = env.BUILD_URL.substring(0, env.BUILD_URL.indexOf('/job/')).replace('localhost', 'host.docker.internal')
+                    env.ARTIFACT_URL = "${jenkinsBaseUrl}/userContent/applications/${appName}/${buildId}/latest-app.zip"
 
                     echo "======================================"
                     echo "       APPLICATION PUBLISHED"
                     echo "======================================"
-
                     echo "Artifact URL:"
                     echo "${env.ARTIFACT_URL}"
                 }
             }
         }
 
-        // ============================================================
-        // DEPLOY APPLICATION
-        // ============================================================
         stage('Deploy Application') {
             agent {
                 docker {
@@ -391,7 +298,6 @@ pipeline {
 
             steps {
                 script {
-
                     echo "=========================================="
                     echo "       START APPLICATION DEPLOYMENT"
                     echo "=========================================="
@@ -399,20 +305,15 @@ pipeline {
                     echo "Artifact URL:"
                     echo "${env.ARTIFACT_URL}"
 
-                    // ==================================================
-                    // 1. REQUEST REDEPLOYMENT
-                    // ==================================================
-
                     echo ""
                     echo "=== Request Redeployment ==="
 
                     def redeployResponse = sh(
                         script: '''
                             set -e
-
-                            curl -sS --fail-with-body \
-                                -X POST "$URL_REDEPLOY" \
-                                -H "Content-Type: application/json" \
+                            curl -sS --fail-with-body \\
+                                -X POST "$URL_REDEPLOY" \\
+                                -H "Content-Type: application/json" \\
                                 -d "{
                                     \\"token_access\\": \\"$DEPLOY_TOKEN\\",
                                     \\"website_id\\": \\"$WEBSITE_ID\\",
@@ -426,10 +327,6 @@ pipeline {
                     echo "Redeploy Response:"
                     echo redeployResponse
 
-                    // ==================================================
-                    // 2. POLLING DEPLOYMENT PROGRESS
-                    // ==================================================
-
                     echo ""
                     echo "=== Waiting For Deployment ==="
 
@@ -438,17 +335,10 @@ pipeline {
                     def deploymentStatus = 'IN_PROGRESS'
 
                     while (deploymentStatus == 'IN_PROGRESS') {
-
                         attempt++
-
                         if (attempt > maxAttempts) {
-                            error(
-                                "Deployment timeout. " +
-                                "Status masih IN_PROGRESS setelah " +
-                                "${maxAttempts} attempts."
-                            )
+                            error("Deployment timeout. Status masih IN_PROGRESS setelah ${maxAttempts} attempts.")
                         }
-
                         sleep time: 5, unit: 'SECONDS'
 
                         echo ""
@@ -457,10 +347,9 @@ pipeline {
                         def progressResponse = sh(
                             script: '''
                                 set -e
-
-                                curl -sS --fail-with-body \
-                                    -X POST "$URL_PROGRESS" \
-                                    -H "Content-Type: application/json" \
+                                curl -sS --fail-with-body \\
+                                    -X POST "$URL_PROGRESS" \\
+                                    -H "Content-Type: application/json" \\
                                     -d "{
                                         \\"token_access\\": \\"$DEPLOY_TOKEN\\",
                                         \\"website_id\\": \\"$WEBSITE_ID\\"
@@ -472,67 +361,35 @@ pipeline {
                         echo "Progress Response:"
                         echo progressResponse
 
-                        // ==================================================
-                        // PARSE JSON
-                        // ==================================================
-
                         def json = readJSON text: progressResponse
-
-                        deploymentStatus = json?.data?.status
-                            ?.toString()
-                            ?.toUpperCase()
+                        deploymentStatus = json?.data?.status?.toString()?.toUpperCase()
 
                         if (!deploymentStatus) {
-                            error(
-                                "Response progress tidak memiliki data.status"
-                            )
+                            error("Response progress tidak memiliki data.status")
                         }
 
                         echo "Deployment Status: ${deploymentStatus}"
 
-                        // ==================================================
-                        // SUCCESS
-                        // ==================================================
-
                         if (deploymentStatus == 'SUCCESS') {
-
                             echo ""
                             echo "=========================================="
                             echo "       ✅ DEPLOYMENT SUCCESS"
                             echo "=========================================="
-
                             break
                         }
 
-                        // ==================================================
-                        // FAIL
-                        // ==================================================
-
                         if (deploymentStatus == 'FAIL') {
-
                             echo ""
                             echo "=========================================="
                             echo "       ❌ DEPLOYMENT FAILED"
                             echo "=========================================="
-
-                            def deploymentLog =
-                                json?.data?.log
-                                    ?: 'Deployment failed tanpa log.'
-
+                            def deploymentLog = json?.data?.log ?: 'Deployment failed tanpa log.'
                             echo ""
                             echo "========== DEPLOYMENT LOG =========="
                             echo deploymentLog
                             echo "===================================="
-
-                            error(
-                                "Deployment gagal untuk website " +
-                                "${WEBSITE_ID}"
-                            )
+                            error("Deployment gagal untuk website ${WEBSITE_ID}")
                         }
-
-                        // ==================================================
-                        // OTHER STATUS
-                        // ==================================================
 
                         echo "Deployment masih berjalan..."
                     }
@@ -546,18 +403,10 @@ pipeline {
         }
     }
 
-    // ================================================================
-    // POST ACTIONS
-    // ================================================================
     post {
-
         always {
-            archiveArtifacts(
-                artifacts: 'trivy-results.sarif',
-                allowEmptyArchive: true
-            )
+            archiveArtifacts(artifacts: 'trivy-results.sarif', allowEmptyArchive: true)
         }
-
         success {
             echo "=========================================="
             echo "       ✅ PIPELINE SUCCESS"
@@ -566,7 +415,6 @@ pipeline {
             echo "📦 Artifact: ${env.ARTIFACT_URL ?: '(not published)'}"
             echo "🚀 Website berhasil dideploy."
         }
-
         failure {
             echo "=========================================="
             echo "       ❌ PIPELINE FAILED"
@@ -574,7 +422,6 @@ pipeline {
             echo "Result: ${currentBuild.currentResult}"
             echo "Periksa log stage yang merah / Console Output untuk penyebab gagal."
         }
-
         unstable {
             echo "=========================================="
             echo "       ⚠️ PIPELINE UNSTABLE"
