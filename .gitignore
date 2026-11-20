@@ -1,0 +1,14 @@
+# Biner diawali slash agar folder internal/server tidak ikut terabaikan di Jenkins
+/server
+/server.exe
+/main
+/app
+/bin/
+
+.env
+coverage.out
+coverage.html
+
+# Hasil build frontend yang di-embed (dibuat oleh build.sh / Jenkins)
+/internal/web/dist/*
+!/internal/web/dist/.gitkeep

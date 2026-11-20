@@ -1,0 +1,715 @@
+swagger: '2.0'
+info:
+  title: Delcom Blog API
+  description: REST API Delcom Blog (Golang Gin, PostgreSQL 17, GORM, OpenAI + Search
+    Engine). Format balasan {status, message, data?}.
+  version: '1.0'
+host: localhost:8081
+basePath: /
+schemes:
+- http
+securityDefinitions:
+  BearerAuth:
+    type: apiKey
+    name: Authorization
+    in: header
+    description: 'Format: Bearer <token JWT>'
+paths:
+  /api.json:
+    get:
+      tags:
+      - Dokumentasi
+      summary: Spesifikasi OpenAPI dinamis
+      description: Spesifikasi OpenAPI dinamis
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+  /api/public/categories:
+    get:
+      tags:
+      - Publik
+      summary: Daftar kategori artikel
+      description: Daftar kategori artikel
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+  /api/public/posts:
+    get:
+      tags:
+      - Publik
+      summary: Daftar artikel terbit
+      description: Daftar artikel terbit
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: query
+        name: q
+        type: string
+        description: Kata kunci
+      - in: query
+        name: category
+        type: string
+        description: Filter kategori
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+  /api/public/posts/{slug}:
+    get:
+      tags:
+      - Publik
+      summary: Detail artikel terbit berdasarkan slug (termasuk penulis dan reading
+        time)
+      description: Detail artikel terbit berdasarkan slug (termasuk penulis dan reading
+        time)
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        type: string
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '404':
+          description: Artikel tidak ditemukan / masih draf
+          schema:
+            $ref: '#/definitions/FailResponse'
+  /api/auth/register:
+    post:
+      tags:
+      - Auth
+      summary: Registrasi akun penulis (author)
+      description: Registrasi akun penulis (author)
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/RegisterRequest'
+      responses:
+        '201':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '400':
+          description: Validasi gagal
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '409':
+          description: Username/email sudah digunakan
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '429':
+          description: Terlalu banyak permintaan
+          schema:
+            $ref: '#/definitions/FailResponse'
+  /api/auth/login:
+    post:
+      tags:
+      - Auth
+      summary: Login dan terbitkan JWT
+      description: Login dan terbitkan JWT
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/LoginRequest'
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '400':
+          description: Validasi gagal
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '401':
+          description: Kredensial salah
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '429':
+          description: Terlalu banyak permintaan
+          schema:
+            $ref: '#/definitions/FailResponse'
+  /api/auth/logout:
+    post:
+      tags:
+      - Auth
+      summary: Logout sesi aktif
+      description: Logout sesi aktif
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+  /api/auth/profile:
+    get:
+      tags:
+      - Auth
+      summary: Profil pengguna aktif
+      description: Profil pengguna aktif
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+    put:
+      tags:
+      - Auth
+      summary: Perbarui profil
+      description: Perbarui profil
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '400':
+          description: Validasi gagal
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '409':
+          description: Konflik
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+  /api/posts:
+    get:
+      tags:
+      - Penulis
+      summary: Seluruh artikel milik penulis (terbit dan draf)
+      description: Seluruh artikel milik penulis (terbit dan draf)
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya penulis
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+    post:
+      tags:
+      - Penulis
+      summary: Buat artikel (slug unik otomatis)
+      description: Buat artikel (slug unik otomatis)
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/PostRequest'
+      responses:
+        '201':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '400':
+          description: Validasi gagal
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya penulis
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+  /api/posts/stats:
+    get:
+      tags:
+      - Penulis
+      summary: Statistik penulis (total, total_terbit, belum_selesai)
+      description: Statistik penulis (total, total_terbit, belum_selesai)
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya penulis
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+  /api/posts/ai-generate:
+    post:
+      tags:
+      - AI
+      summary: 'AI Blog Generator: Search Engine + OpenAI Chat Completions'
+      description: 'AI Blog Generator: Search Engine + OpenAI Chat Completions'
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/GenerateRequest'
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '400':
+          description: Validasi gagal
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya penulis
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '429':
+          description: Rate limit
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '502':
+          description: Search/AI gagal
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        '503':
+          description: Belum dikonfigurasi
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        '504':
+          description: Timeout
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+  /api/posts/{id}:
+    get:
+      tags:
+      - Penulis
+      summary: Detail artikel milik penulis
+      description: Detail artikel milik penulis
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya penulis
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '404':
+          description: Artikel tidak ditemukan
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+    put:
+      tags:
+      - Penulis
+      summary: Perbarui artikel milik penulis
+      description: Perbarui artikel milik penulis
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      - in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/PostRequest'
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya penulis
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '400':
+          description: Validasi gagal
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '404':
+          description: Artikel tidak ditemukan
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+    delete:
+      tags:
+      - Penulis
+      summary: Hapus artikel milik penulis
+      description: Hapus artikel milik penulis
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya penulis
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '404':
+          description: Artikel tidak ditemukan
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+  /api/posts/{id}/toggle-publish:
+    patch:
+      tags:
+      - Penulis
+      summary: Ubah status Draf <-> Terbit
+      description: Ubah status Draf <-> Terbit
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya penulis
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '404':
+          description: Artikel tidak ditemukan
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+  /api/admin/users:
+    get:
+      tags:
+      - Admin
+      summary: Seluruh pengguna beserta total artikel
+      description: Seluruh pengguna beserta total artikel
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya admin
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+  /api/admin/posts:
+    get:
+      tags:
+      - Admin
+      summary: Arsip seluruh artikel semua penulis
+      description: Arsip seluruh artikel semua penulis
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya admin
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+  /api/admin/users/{id}/posts:
+    get:
+      tags:
+      - Admin
+      summary: Artikel milik pengguna tertentu
+      description: Artikel milik pengguna tertentu
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        '200':
+          description: Berhasil
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        '401':
+          description: Token tidak valid
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '403':
+          description: Hanya admin
+          schema:
+            $ref: '#/definitions/FailResponse'
+        '404':
+          description: Pengguna tidak ditemukan
+          schema:
+            $ref: '#/definitions/FailResponse'
+      security:
+      - BearerAuth: []
+definitions:
+  SuccessResponse:
+    type: object
+    properties:
+      status:
+        type: string
+        example: success
+      message:
+        type: string
+      data:
+        type: object
+  FailResponse:
+    type: object
+    properties:
+      status:
+        type: string
+        example: fail
+      message:
+        type: string
+      data:
+        type: object
+  ErrorResponse:
+    type: object
+    properties:
+      status:
+        type: string
+        example: error
+      message:
+        type: string
+  RegisterRequest:
+    type: object
+    required:
+    - username
+    - email
+    - password
+    properties:
+      username:
+        type: string
+        minLength: 3
+        maxLength: 50
+      email:
+        type: string
+        format: email
+      password:
+        type: string
+        minLength: 6
+        maxLength: 72
+  LoginRequest:
+    type: object
+    required:
+    - username
+    - password
+    properties:
+      username:
+        type: string
+      password:
+        type: string
+  UpdateProfileRequest:
+    type: object
+    properties:
+      username:
+        type: string
+      email:
+        type: string
+        format: email
+      password:
+        type: string
+  PostRequest:
+    type: object
+    required:
+    - title
+    - category
+    - content
+    properties:
+      title:
+        type: string
+      category:
+        type: string
+        enum:
+        - Teknologi
+        - Pendidikan
+        - Gaya Hidup
+        - Bisnis
+        - Opini
+        - Umum
+      excerpt:
+        type: string
+      content:
+        type: string
+        description: Markdown
+      cover_image_path:
+        type: string
+  GenerateRequest:
+    type: object
+    required:
+    - topic
+    properties:
+      topic:
+        type: string
+        minLength: 3
+        maxLength: 300
+      category:
+        type: string
+      include_web_search:
+        type: boolean
+        default: true
