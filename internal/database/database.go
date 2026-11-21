@@ -2,6 +2,8 @@
 package database
 
 import (
+	"os"
+
 	"github.com/glebarez/sqlite"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
@@ -17,8 +19,11 @@ func Open(dialector gorm.Dialector) (*gorm.DB, error) {
 	return gorm.Open(dialector, &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 }
 
-// Connect membuka koneksi PostgreSQL untuk runtime aplikasi.
+// Connect membuka koneksi basis data untuk runtime aplikasi (PostgreSQL bila dikonfigurasi, atau SQLite).
 func Connect(cfg *config.Config) (*gorm.DB, error) {
+	if cfg.DBConnection == "sqlite" || (os.Getenv("DB_HOST") == "" && cfg.DBPort != "1") {
+		return Open(sqlite.Open(cfg.DBDatabase + ".db"))
+	}
 	return Open(postgres.Open(cfg.DSN()))
 }
 

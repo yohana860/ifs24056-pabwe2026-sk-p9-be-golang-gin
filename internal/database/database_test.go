@@ -41,6 +41,11 @@ func TestConnectFailsWithoutServer(t *testing.T) {
 	cfg := &config.Config{DBHost: "127.0.0.1", DBPort: "1", DBUsername: "x", DBPassword: "x", DBDatabase: "x", DBSSLMode: "disable"}
 	_, err := Connect(cfg)
 	assert.Error(t, err)
+
+	cfgSQLite := &config.Config{DBConnection: "sqlite", DBDatabase: "test_sqlite"}
+	db, errSQLite := Connect(cfgSQLite)
+	assert.NoError(t, errSQLite)
+	assert.NotNil(t, db)
 }
 
 func TestSeed(t *testing.T) {
