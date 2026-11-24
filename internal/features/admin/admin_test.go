@@ -60,9 +60,11 @@ func TestMonitoring(t *testing.T) {
 	users := out["data"].([]any)
 	require.Len(t, users, 2)
 	b := users[1].(map[string]any)
-	assert.EqualValues(t, 3, b["total_posts"])
+	
+	// PERBAIKAN: total_posts menjadi total_articles
+	assert.EqualValues(t, 3, b["total_articles"])
 	assert.EqualValues(t, 2, b["total_published"])
-	assert.EqualValues(t, 0, users[0].(map[string]any)["total_posts"])
+	assert.EqualValues(t, 0, users[0].(map[string]any)["total_articles"])
 	assert.NotContains(t, fmt.Sprint(out), "password")
 
 	code, out = get(r, "/posts")

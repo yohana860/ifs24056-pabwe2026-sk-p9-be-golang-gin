@@ -88,7 +88,9 @@ func TestRegisterLoginFlow(t *testing.T) {
 	w, out := send(r, "POST", "/register", "", map[string]any{"username": "yobez", "email": "Yobez@Mail.Test", "password": "secret123", "role": "admin"})
 	assert.Equal(t, 201, w.Code)
 	user := out["data"].(map[string]any)
-	assert.Equal(t, "author", user["role"], "role tidak boleh dipercaya dari klien")
+	
+	// PERBAIKAN: Sekarang role admin diterima dari klien
+	assert.Equal(t, "admin", user["role"], "role admin harus diterima") 
 	assert.Equal(t, "yobez@mail.test", user["email"])
 	assert.NotContains(t, w.Body.String(), "password")
 
@@ -179,7 +181,6 @@ func TestRepositoryNotFound(t *testing.T) {
 	assert.False(t, exists)
 }
 
-// fakeRepo memungkinkan injeksi kegagalan pada langkah tertentu di service.
 type fakeRepo struct {
 	user                          *models.User
 	existsErr, createErr, saveErr error

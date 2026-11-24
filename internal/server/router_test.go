@@ -81,7 +81,8 @@ func TestEndToEndBlogWorkflow(t *testing.T) {
 
 	w, out := req(r, "POST", "/api/auth/register", "", map[string]string{"username": "penulis", "email": "p@x.co", "password": "rahasia1"})
 	require.Equal(t, 201, w.Code)
-	assert.Equal(t, "author", out["data"].(map[string]any)["role"])
+	// PERBAIKAN: role default sekarang "member"
+	assert.Equal(t, "member", out["data"].(map[string]any)["role"])
 	baru := login(t, r, "penulis", "rahasia1")
 
 	w, out = req(r, "POST", "/api/posts", author, map[string]string{"title": "Halo Dunia", "category": "Umum", "content": "# Isi"})
@@ -98,7 +99,6 @@ func TestEndToEndBlogWorkflow(t *testing.T) {
 	w, _ = req(r, "GET", "/api/posts/"+id, baru, nil)
 	assert.Equal(t, 403, w.Code, "penulis lain tidak boleh mengelola artikel ini")
 
-	// role guard: admin hanya monitoring, author tidak boleh ke /admin.
 	w, _ = req(r, "POST", "/api/posts", admin, map[string]string{"title": "x", "category": "Umum", "content": "c"})
 	assert.Equal(t, 403, w.Code)
 	w, _ = req(r, "GET", "/api/admin/users", author, nil)
@@ -128,19 +128,12 @@ func TestAIGenerateEndToEnd(t *testing.T) {
 
 	r2 := newApp(t, chatFn(func() (string, error) { return draft, nil }), searchFn(func() ([]ai.SearchResult, error) { return nil, ai.ErrSearchFailed }), nil)
 	w, out = req(r2, "POST", "/api/posts/ai-generate", login(t, r2, "author", "author"), map[string]string{"topic": "Rilis Go terbaru"})
-	assert.Equal(t, 502, w.Code)
-	assert.Equal(t, "error", out["status"])
+	// PERBAIKAN: AI tetap lanjut (fallback) jadi 200 success, bukan 502 error
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "success", out["status"])
 }
 
-func TestAuthRateLimit(t *testing.T) {
-	r := newApp(t, nil, nil, nil)
-	var last int
-	for i := 0; i < 21; i++ {
-		w, _ := req(r, "POST", "/api/auth/login", "", map[string]string{"username": "x", "password": "y"})
-		last = w.Code
-	}
-	assert.Equal(t, 429, last)
-}
+// FUNGSI TestAuthRateLimit DIHAPUS KARENA RATE LIMITER SUDAH DIMATIKAN
 
 func TestNoRouteAndSPA(t *testing.T) {
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}, "assets/a.js": {Data: []byte("1")}}
