@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -89,7 +90,8 @@ func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10))
+		log.Printf("llm upstream %d: %s", resp.StatusCode, b)
 		return "", fmt.Errorf("%w: status %d", ErrUpstream, resp.StatusCode)
 	}
 	var out chatResponse

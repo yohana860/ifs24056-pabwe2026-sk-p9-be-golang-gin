@@ -3,7 +3,9 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"slices"
 	"strings"
 
@@ -46,15 +48,21 @@ func buildPrompt(topic string, sources []SearchResult) string {
 }
 
 // Generate membuat draf artikel. Sumber rujukan selalu berasal dari Search Engine, bukan klaim AI.
+// Bila Search Engine gagal, artikel tetap dibuat tanpa sumber (searched=false).
 func (s *Service) Generate(ctx context.Context, req GenerateRequest) (*BlogDraft, error) {
 	var sources []SearchResult
 	searched := req.IncludeWebSearch == nil || *req.IncludeWebSearch
 	if searched {
 		found, err := s.search.Search(ctx, req.Topic)
-		if err != nil {
+		switch {
+		case err == nil:
+			sources = found
+		case errors.Is(err, context.DeadlineExceeded):
 			return nil, err
+		default:
+			log.Printf("search gagal, lanjut tanpa sumber: %v", err)
+			searched = false
 		}
-		sources = found
 	}
 	raw, err := s.chat.Chat(ctx, []Message{
 		{Role: "system", Content: systemPrompt},

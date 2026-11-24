@@ -24,7 +24,11 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
 	if cfg.DBConnection == "sqlite" || (os.Getenv("DB_HOST") == "" && cfg.DBPort != "1") {
 		return Open(sqlite.Open(cfg.DBDatabase + ".db"))
 	}
-	return Open(postgres.Open(cfg.DSN()))
+	// PreferSimpleProtocol wajib agar kompatibel dengan PgBouncer (tanpa prepared statement).
+	return Open(postgres.New(postgres.Config{
+		DSN:                  cfg.DSN(),
+		PreferSimpleProtocol: true,
+	}))
 }
 
 // OpenMemory membuka SQLite in-memory (khusus unit test mandiri).

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -124,6 +125,7 @@ func (c *SearchClient) Search(ctx context.Context, query string) ([]SearchResult
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxSearchBodySize))
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		log.Printf("search upstream %d: %s", resp.StatusCode, truncate(string(raw), 300))
 		return nil, fmt.Errorf("%w: status %d", ErrSearchFailed, resp.StatusCode)
 	}
 	items, err := decodeItems(raw)

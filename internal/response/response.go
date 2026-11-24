@@ -50,10 +50,17 @@ func Validation(c *gin.Context, err error) {
 		return
 	}
 	fields := map[string]string{}
+	parts := make([]string, 0, len(verrs))
 	for _, fe := range verrs {
-		fields[toSnake(fe.Field())] = ruleMessage(fe)
+		name := toSnake(fe.Field())
+		fields[name] = ruleMessage(fe)
+		parts = append(parts, name+" "+ruleMessage(fe))
 	}
-	c.JSON(http.StatusBadRequest, Body{Status: "fail", Message: "Validasi gagal", Data: gin.H{"errors": fields}})
+	c.JSON(http.StatusBadRequest, Body{
+		Status:  "fail",
+		Message: "Validasi gagal: " + strings.Join(parts, ", "),
+		Data:    gin.H{"errors": fields},
+	})
 }
 
 func ruleMessage(fe validator.FieldError) string {
