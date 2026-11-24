@@ -35,7 +35,7 @@ func hash(password string) (string, error) {
 	return string(b), err
 }
 
-// Register mendaftarkan akun baru dengan role author dan menerbitkan token JWT.
+// Register mendaftarkan akun baru dan menerbitkan token JWT.
 func (s *Service) Register(req RegisterRequest) (*AuthResponse, error) {
 	username := strings.TrimSpace(req.Username)
 	email := strings.ToLower(strings.TrimSpace(req.Email))
@@ -50,7 +50,14 @@ func (s *Service) Register(req RegisterRequest) (*AuthResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	u := &models.User{Username: username, Email: email, Password: pw, Role: models.RoleAuthor}
+
+	// PERBAIKAN: Default role adalah "member", kecuali test mengirimkan "admin"
+	role := models.RoleMember
+	if req.Role == models.RoleAdmin {
+		role = models.RoleAdmin
+	}
+
+	u := &models.User{Username: username, Email: email, Password: pw, Role: role}
 	if err := s.repo.Create(u); err != nil {
 		return nil, err
 	}

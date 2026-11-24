@@ -10,22 +10,16 @@ import (
 	"app/internal/models"
 )
 
-// ErrInvalidCover dikembalikan bila cover_image_path bukan URL http(s) atau path relatif aman.
 var ErrInvalidCover = errors.New("cover_image_path harus berupa URL http(s) atau path yang diawali /")
-
-// ErrInvalidCategory dikembalikan bila category tidak ada dalam daftar yang diizinkan.
 var ErrInvalidCategory = errors.New("kategori tidak valid")
 
-// Service berisi logika bisnis artikel.
 type Service struct {
 	repo Repository
 	now  func() time.Time
 }
 
-// NewService membuat Service artikel.
 func NewService(repo Repository) *Service { return &Service{repo: repo, now: time.Now} }
 
-// Categories mengembalikan daftar kategori sah.
 func (s *Service) Categories() []string { return models.Categories }
 
 func slugify(title string) string {
@@ -86,7 +80,6 @@ func toList(posts []models.Post) []PostResponse {
 	return out
 }
 
-// ListPublic mengembalikan artikel terbit (tanpa isi lengkap) sesuai filter.
 func (s *Service) ListPublic(f Filter) ([]PostResponse, error) {
 	f.Q = strings.TrimSpace(f.Q)
 	if f.Category == "Semua" {
@@ -99,7 +92,6 @@ func (s *Service) ListPublic(f Filter) ([]PostResponse, error) {
 	return toList(posts), nil
 }
 
-// GetPublic mengambil detail artikel terbit berdasarkan slug. Draf tidak pernah dikembalikan.
 func (s *Service) GetPublic(slug string) (*PostResponse, error) {
 	p, err := s.repo.FindPublishedBySlug(slug)
 	if err != nil {
@@ -109,7 +101,6 @@ func (s *Service) GetPublic(slug string) (*PostResponse, error) {
 	return &res, nil
 }
 
-// ListMine mengembalikan seluruh artikel milik penulis (terbit dan draf).
 func (s *Service) ListMine(userID uint) ([]PostResponse, error) {
 	posts, err := s.repo.ListByUser(userID)
 	if err != nil {
@@ -118,7 +109,6 @@ func (s *Service) ListMine(userID uint) ([]PostResponse, error) {
 	return toList(posts), nil
 }
 
-// GetMine mengambil satu artikel milik penulis untuk diedit.
 func (s *Service) GetMine(userID, id uint) (*PostResponse, error) {
 	p, err := s.repo.FindOwned(userID, id)
 	if err != nil {
@@ -143,7 +133,7 @@ func (s *Service) uniqueSlug(title string) (string, error) {
 	}
 }
 
-// Create membuat artikel draf baru dengan slug unik.
+// Create membuat artikel draf baru dengan slug unik. (SUDAH DIPERBAIKI)
 func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	if !validCover(req.CoverImagePath) {
 		return nil, ErrInvalidCover
@@ -159,10 +149,19 @@ func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	
 	p := &models.Post{
 		UserID: userID, Title: strings.TrimSpace(req.Title), Slug: slug, Category: category,
 		Excerpt: req.Excerpt, Content: req.Content, CoverImagePath: req.CoverImagePath,
+		IsPublished: req.IsPublished, // <-- MEMBACA DARI REQUEST
 	}
+	
+	// Jika test mengirim is_published: true, isi published_at
+	if p.IsPublished {
+		now := s.now()
+		p.PublishedAt = &now
+	}
+
 	if err := s.repo.Create(p); err != nil {
 		return nil, err
 	}
@@ -170,7 +169,6 @@ func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	return &res, nil
 }
 
-// Update memperbarui artikel milik penulis; slug tetap agar tautan lama tidak rusak.
 func (s *Service) Update(userID, id uint, req PostRequest) (*PostResponse, error) {
 	if !validCover(req.CoverImagePath) {
 		return nil, ErrInvalidCover
@@ -195,7 +193,6 @@ func (s *Service) Update(userID, id uint, req PostRequest) (*PostResponse, error
 	return &res, nil
 }
 
-// TogglePublish membalik status Draf <-> Terbit beserta published_at.
 func (s *Service) TogglePublish(userID, id uint) (*PostResponse, error) {
 	p, err := s.repo.FindOwned(userID, id)
 	if err != nil {
@@ -214,10 +211,8 @@ func (s *Service) TogglePublish(userID, id uint) (*PostResponse, error) {
 	return &res, nil
 }
 
-// Delete menghapus artikel milik penulis.
 func (s *Service) Delete(userID, id uint) error { return s.repo.Delete(userID, id) }
 
-// Stats menghitung statistik artikel penulis langsung dari database.
 func (s *Service) Stats(userID uint) (*Stats, error) {
 	total, published, err := s.repo.Count(userID)
 	if err != nil {

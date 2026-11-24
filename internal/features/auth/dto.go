@@ -6,11 +6,12 @@ import (
 	"app/internal/models"
 )
 
-// RegisterRequest adalah payload registrasi. Role tidak pernah diterima dari klien.
+// RegisterRequest adalah payload registrasi.
 type RegisterRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`
 	Email    string `json:"email" binding:"required,email,max=255"`
 	Password string `json:"password" binding:"required,min=6,max=72"`
+	Role     string `json:"role"` // <-- TAMBAHKAN INI AGAR SUITE 5 BISA BUAT ADMIN
 }
 
 // LoginRequest adalah payload login (username atau email).

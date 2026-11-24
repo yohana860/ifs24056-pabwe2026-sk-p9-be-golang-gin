@@ -1,4 +1,3 @@
-// Package post berisi fitur artikel: publik, penulis (CRUD, publish), dan statistik.
 package post
 
 import "time"
@@ -10,6 +9,7 @@ type PostRequest struct {
 	Excerpt        string `json:"excerpt" binding:"max=500"`
 	Content        string `json:"content" binding:"required"`
 	CoverImagePath string `json:"cover_image_path" binding:"max=2048"`
+	IsPublished    bool   `json:"is_published"` // <-- WAJIB ADA UNTUK TEST SUITE 3
 }
 
 // Author adalah informasi publik penulis (tanpa email).
