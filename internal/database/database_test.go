@@ -63,6 +63,7 @@ func TestSeed(t *testing.T) {
 	assert.Equal(t, "author", users[1].Username)
 	assert.Equal(t, models.RoleAuthor, users[1].Role)
 	assert.Equal(t, "member", users[2].Username)
+	assert.Equal(t, models.RoleMember, users[2].Role)
 	assert.NotEqual(t, "admin", users[0].Password, "password harus di-hash")
 }
 

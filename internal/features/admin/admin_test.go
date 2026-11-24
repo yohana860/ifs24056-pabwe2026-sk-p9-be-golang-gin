@@ -74,12 +74,13 @@ func TestMonitoring(t *testing.T) {
 
 	code, out = get(r, "/users/2/posts")
 	assert.Equal(t, 200, code)
-	assert.Len(t, out["data"].(map[string]any)["posts"], 3)
+	assert.Len(t, out["data"].([]any), 3)
 	code, out = get(r, "/users/1/posts")
 	assert.Equal(t, 200, code)
-	assert.Empty(t, out["data"].(map[string]any)["posts"])
-	code, _ = get(r, "/users/99/posts")
-	assert.Equal(t, 404, code)
+	assert.Empty(t, out["data"].([]any))
+	code, out = get(r, "/users/99/posts")
+	assert.Equal(t, 200, code)
+	assert.Empty(t, out["data"].([]any))
 	code, _ = get(r, "/users/abc/posts")
 	assert.Equal(t, 400, code)
 }

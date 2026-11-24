@@ -35,8 +35,8 @@ func hash(password string) (string, error) {
 	return string(b), err
 }
 
-// Register mendaftarkan akun baru dengan role author.
-func (s *Service) Register(req RegisterRequest) (*UserResponse, error) {
+// Register mendaftarkan akun baru dengan role author dan menerbitkan token JWT.
+func (s *Service) Register(req RegisterRequest) (*AuthResponse, error) {
 	username := strings.TrimSpace(req.Username)
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	taken, err := s.repo.ExistsOther(username, email, 0)
@@ -54,13 +54,21 @@ func (s *Service) Register(req RegisterRequest) (*UserResponse, error) {
 	if err := s.repo.Create(u); err != nil {
 		return nil, err
 	}
-	res := toResponse(u)
+	token, _ := middleware.GenerateToken(s.secret, u.ID, u.Username, u.Role, s.ttl)
+	res := toAuthResponse(u, token)
 	return &res, nil
 }
 
 // Login memverifikasi kredensial dan menerbitkan token JWT.
 func (s *Service) Login(req LoginRequest) (*AuthResponse, error) {
-	u, err := s.repo.FindByLogin(strings.TrimSpace(req.Username))
+	login := strings.TrimSpace(req.Username)
+	if login == "" {
+		login = strings.TrimSpace(req.Email)
+	}
+	if login == "" {
+		return nil, ErrInvalidCredentials
+	}
+	u, err := s.repo.FindByLogin(login)
 	if errors.Is(err, ErrNotFound) {
 		return nil, ErrInvalidCredentials
 	}
@@ -72,7 +80,8 @@ func (s *Service) Login(req LoginRequest) (*AuthResponse, error) {
 	}
 	// SignedString dengan kunci []byte tidak pernah gagal.
 	token, _ := middleware.GenerateToken(s.secret, u.ID, u.Username, u.Role, s.ttl)
-	return &AuthResponse{Token: token, User: toResponse(u)}, nil
+	res := toAuthResponse(u, token)
+	return &res, nil
 }
 
 // Profile mengambil profil pengguna aktif.

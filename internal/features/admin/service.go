@@ -102,14 +102,13 @@ func (s *Service) ListUsers() ([]UserStat, error) { return s.repo.ListUserStats(
 func (s *Service) ListPosts() ([]PostRow, error) { return s.repo.ListPosts(0) }
 
 // ListUserPosts mengembalikan seluruh artikel milik pengguna tertentu.
-func (s *Service) ListUserPosts(id uint) (*UserPosts, error) {
-	u, err := s.repo.FindUser(id)
-	if err != nil {
-		return nil, err
-	}
+func (s *Service) ListUserPosts(id uint) ([]PostRow, error) {
 	posts, err := s.repo.ListPosts(id)
 	if err != nil {
 		return nil, err
 	}
-	return &UserPosts{User: *u, Posts: posts}, nil
+	if posts == nil {
+		posts = []PostRow{}
+	}
+	return posts, nil
 }

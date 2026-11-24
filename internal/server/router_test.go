@@ -96,7 +96,7 @@ func TestEndToEndBlogWorkflow(t *testing.T) {
 	w, _ = req(r, "GET", "/api/public/categories", "", nil)
 	assert.Equal(t, 200, w.Code)
 	w, _ = req(r, "GET", "/api/posts/"+id, baru, nil)
-	assert.Equal(t, 404, w.Code, "penulis lain tidak boleh mengelola artikel ini")
+	assert.Equal(t, 403, w.Code, "penulis lain tidak boleh mengelola artikel ini")
 
 	// role guard: admin hanya monitoring, author tidak boleh ke /admin.
 	w, _ = req(r, "POST", "/api/posts", admin, map[string]string{"title": "x", "category": "Umum", "content": "c"})

@@ -146,7 +146,7 @@ func TestAuthorCRUDAndOwnership(t *testing.T) {
 			path += "/toggle-publish"
 		}
 		code, _ = call(r, m, path, 2, body)
-		assert.Equal(t, 404, code, m)
+		assert.Equal(t, 403, code, m)
 	}
 
 	upd := newReq("Judul Baru")
@@ -163,6 +163,12 @@ func TestAuthorCRUDAndOwnership(t *testing.T) {
 	code, _ = call(r, "DELETE", "/posts/"+id, 1, nil)
 	assert.Equal(t, 200, code)
 	code, _ = call(r, "DELETE", "/posts/"+id, 1, nil)
+	assert.Equal(t, 404, code)
+	code, _ = call(r, "GET", "/posts/9999", 1, nil)
+	assert.Equal(t, 404, code)
+	code, _ = call(r, "PUT", "/posts/9999", 1, newReq("x"))
+	assert.Equal(t, 404, code)
+	code, _ = call(r, "PATCH", "/posts/9999/toggle-publish", 1, nil)
 	assert.Equal(t, 404, code)
 	for _, m := range []string{"GET", "PUT", "DELETE"} {
 		code, _ = call(r, m, "/posts/abc", 1, newReq("x"))
@@ -335,4 +341,20 @@ func TestHandlerServerErrors(t *testing.T) {
 		assert.Equal(t, 500, code, tc.m+" "+tc.p)
 		assert.Equal(t, "error", out["status"])
 	}
+}
+
+func TestDefaultCategory(t *testing.T) {
+	r := engine(memDB(t))
+	code, out := call(r, "POST", "/posts", 1, PostRequest{Title: "Tanpa Kategori", Content: "konten"})
+	assert.Equal(t, 201, code)
+	assert.Equal(t, "Umum", data(out)["category"])
+	assert.Nil(t, data(out)["published_at"])
+
+	id := fmt.Sprint(int(data(out)["id"].(float64)))
+	code, out = call(r, "PUT", "/posts/"+id, 1, PostRequest{Title: "Judul Update", Content: "konten baru", Category: ""})
+	assert.Equal(t, 200, code)
+	assert.Equal(t, "Umum", data(out)["category"])
+
+	code, _ = call(r, "PUT", "/posts/"+id, 1, PostRequest{Title: "Judul Update", Content: "konten baru", Category: "Ngawur"})
+	assert.Equal(t, 400, code)
 }

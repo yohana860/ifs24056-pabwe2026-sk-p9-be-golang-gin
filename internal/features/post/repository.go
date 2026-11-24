@@ -8,8 +8,11 @@ import (
 	"app/internal/models"
 )
 
-// ErrNotFound dikembalikan ketika artikel tidak ada atau bukan milik pengguna.
+// ErrNotFound dikembalikan ketika artikel tidak ada.
 var ErrNotFound = errors.New("artikel tidak ditemukan")
+
+// ErrForbidden dikembalikan ketika artikel ada tetapi bukan milik pengguna.
+var ErrForbidden = errors.New("artikel bukan milik Anda")
 
 // Repository mengabstraksi akses data artikel.
 type Repository interface {
@@ -74,8 +77,11 @@ func (r *GormRepository) ListByUser(userID uint) ([]models.Post, error) {
 
 func (r *GormRepository) FindOwned(userID, id uint) (*models.Post, error) {
 	var p models.Post
-	if err := r.db.Where("id = ? AND user_id = ?", id, userID).First(&p).Error; err != nil {
+	if err := r.db.First(&p, id).Error; err != nil {
 		return nil, mapErr(err)
+	}
+	if p.UserID != userID {
+		return nil, ErrForbidden
 	}
 	return &p, nil
 }
@@ -85,14 +91,14 @@ func (r *GormRepository) Create(p *models.Post) error { return r.db.Create(p).Er
 func (r *GormRepository) Save(p *models.Post) error { return r.db.Save(p).Error }
 
 func (r *GormRepository) Delete(userID, id uint) error {
-	res := r.db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Post{})
-	if res.Error != nil {
-		return res.Error
+	var p models.Post
+	if err := r.db.First(&p, id).Error; err != nil {
+		return mapErr(err)
 	}
-	if res.RowsAffected == 0 {
-		return ErrNotFound
+	if p.UserID != userID {
+		return ErrForbidden
 	}
-	return nil
+	return r.db.Delete(&p).Error
 }
 
 func (r *GormRepository) SlugExists(slug string) (bool, error) {

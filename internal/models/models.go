@@ -6,6 +6,7 @@ import "time"
 const (
 	RoleAuthor = "author"
 	RoleAdmin  = "admin"
+	RoleMember = "member"
 )
 
 // Categories adalah daftar kategori artikel yang sah.

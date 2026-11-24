@@ -3,6 +3,7 @@ package post
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,6 +12,9 @@ import (
 
 // ErrInvalidCover dikembalikan bila cover_image_path bukan URL http(s) atau path relatif aman.
 var ErrInvalidCover = errors.New("cover_image_path harus berupa URL http(s) atau path yang diawali /")
+
+// ErrInvalidCategory dikembalikan bila category tidak ada dalam daftar yang diizinkan.
+var ErrInvalidCategory = errors.New("kategori tidak valid")
 
 // Service berisi logika bisnis artikel.
 type Service struct {
@@ -144,12 +148,19 @@ func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	if !validCover(req.CoverImagePath) {
 		return nil, ErrInvalidCover
 	}
+	category := strings.TrimSpace(req.Category)
+	if category == "" {
+		category = "Umum"
+	}
+	if !slices.Contains(models.Categories, category) {
+		return nil, ErrInvalidCategory
+	}
 	slug, err := s.uniqueSlug(req.Title)
 	if err != nil {
 		return nil, err
 	}
 	p := &models.Post{
-		UserID: userID, Title: strings.TrimSpace(req.Title), Slug: slug, Category: req.Category,
+		UserID: userID, Title: strings.TrimSpace(req.Title), Slug: slug, Category: category,
 		Excerpt: req.Excerpt, Content: req.Content, CoverImagePath: req.CoverImagePath,
 	}
 	if err := s.repo.Create(p); err != nil {
@@ -164,11 +175,18 @@ func (s *Service) Update(userID, id uint, req PostRequest) (*PostResponse, error
 	if !validCover(req.CoverImagePath) {
 		return nil, ErrInvalidCover
 	}
+	category := strings.TrimSpace(req.Category)
+	if category == "" {
+		category = "Umum"
+	}
+	if !slices.Contains(models.Categories, category) {
+		return nil, ErrInvalidCategory
+	}
 	p, err := s.repo.FindOwned(userID, id)
 	if err != nil {
 		return nil, err
 	}
-	p.Title, p.Category, p.Excerpt = strings.TrimSpace(req.Title), req.Category, req.Excerpt
+	p.Title, p.Category, p.Excerpt = strings.TrimSpace(req.Title), category, req.Excerpt
 	p.Content, p.CoverImagePath = req.Content, req.CoverImagePath
 	if err := s.repo.Save(p); err != nil {
 		return nil, err
@@ -205,5 +223,11 @@ func (s *Service) Stats(userID uint) (*Stats, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Stats{Total: total, TotalTerbit: published, BelumSelesai: total - published}, nil
+	return &Stats{
+		Total:         total,
+		TotalArticles: total,
+		TotalTerbit:   published,
+		TotalSelesai:  published,
+		BelumSelesai:  total - published,
+	}, nil
 }

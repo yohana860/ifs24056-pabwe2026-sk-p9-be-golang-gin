@@ -32,7 +32,9 @@ func fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		response.Fail(c, http.StatusNotFound, err.Error())
-	case errors.Is(err, ErrInvalidCover):
+	case errors.Is(err, ErrForbidden):
+		response.Fail(c, http.StatusForbidden, err.Error())
+	case errors.Is(err, ErrInvalidCover), errors.Is(err, ErrInvalidCategory):
 		response.Fail(c, http.StatusBadRequest, err.Error())
 	default:
 		response.Error(c, http.StatusInternalServerError, "Terjadi kesalahan pada server")

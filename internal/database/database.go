@@ -47,7 +47,7 @@ func Seed(db *gorm.DB, cfg *config.Config) error {
 	seeds := []struct{ username, password, role string }{
 		{cfg.AdminUsername, cfg.AdminPassword, models.RoleAdmin},
 		{"author", "author", models.RoleAuthor},
-		{"member", "member", models.RoleAuthor},
+		{"member", "member", models.RoleMember},
 	}
 	for _, s := range seeds {
 		var count int64

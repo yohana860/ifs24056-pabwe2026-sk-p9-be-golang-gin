@@ -97,7 +97,7 @@ func TestRegisterLoginFlow(t *testing.T) {
 	assert.NotEqual(t, "secret123", stored.Password)
 
 	w, _ = send(r, "POST", "/register", "", RegisterRequest{Username: "yobez", Email: "other@mail.test", Password: "secret123"})
-	assert.Equal(t, 409, w.Code)
+	assert.Equal(t, 400, w.Code)
 	w, _ = send(r, "POST", "/register", "", RegisterRequest{Username: "short", Password: "123"})
 	assert.Equal(t, 400, w.Code)
 

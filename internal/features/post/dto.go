@@ -6,7 +6,7 @@ import "time"
 // PostRequest adalah payload membuat/memperbarui artikel.
 type PostRequest struct {
 	Title          string `json:"title" binding:"required,max=255"`
-	Category       string `json:"category" binding:"required,oneof='Teknologi' 'Pendidikan' 'Gaya Hidup' 'Bisnis' 'Opini' 'Umum'"`
+	Category       string `json:"category"`
 	Excerpt        string `json:"excerpt" binding:"max=500"`
 	Content        string `json:"content" binding:"required"`
 	CoverImagePath string `json:"cover_image_path" binding:"max=2048"`
@@ -43,7 +43,9 @@ type Filter struct {
 
 // Stats adalah ringkasan statistik penulis yang dihitung dari database.
 type Stats struct {
-	Total        int64 `json:"total"`
-	TotalTerbit  int64 `json:"total_terbit"`
-	BelumSelesai int64 `json:"belum_selesai"`
+	Total         int64 `json:"total"`
+	TotalArticles int64 `json:"total_articles"`
+	TotalTerbit   int64 `json:"total_terbit"`
+	TotalSelesai  int64 `json:"total_selesai"`
+	BelumSelesai  int64 `json:"belum_selesai"`
 }

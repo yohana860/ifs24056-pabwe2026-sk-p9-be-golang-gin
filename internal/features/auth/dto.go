@@ -15,7 +15,8 @@ type RegisterRequest struct {
 
 // LoginRequest adalah payload login (username atau email).
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
 	Password string `json:"password" binding:"required"`
 }
 
@@ -37,8 +38,28 @@ type UserResponse struct {
 
 // AuthResponse berisi token JWT dan profil pengguna.
 type AuthResponse struct {
-	Token string       `json:"token"`
-	User  UserResponse `json:"user"`
+	Token       string       `json:"token"`
+	AccessToken string       `json:"access_token,omitempty"`
+	User        UserResponse `json:"user"`
+	ID          uint         `json:"id"`
+	Username    string       `json:"username"`
+	Email       string       `json:"email"`
+	Role        string       `json:"role"`
+	CreatedAt   time.Time    `json:"created_at"`
+}
+
+func toAuthResponse(u *models.User, token string) AuthResponse {
+	ur := toResponse(u)
+	return AuthResponse{
+		Token:       token,
+		AccessToken: token,
+		User:        ur,
+		ID:          ur.ID,
+		Username:    ur.Username,
+		Email:       ur.Email,
+		Role:        ur.Role,
+		CreatedAt:   ur.CreatedAt,
+	}
 }
 
 func toResponse(u *models.User) UserResponse {
