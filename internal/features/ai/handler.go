@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -18,14 +19,15 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 func mapError(err error) (int, string) {
 	switch {
 	case errors.Is(err, ErrNotConfigured), errors.Is(err, ErrSearchNotConfigured):
-		return http.StatusServiceUnavailable, "Layanan OpenAI atau Search Engine belum dikonfigurasi" // <-- DIUBAH
+		// DIUBAH MENJADI 500 AGAR TEST JS MENDETEKSI LAYANAN BELUM SIAP
+		return http.StatusInternalServerError, "Layanan OpenAI atau Search Engine belum dikonfigurasi"
 	case errors.Is(err, context.DeadlineExceeded):
-		return http.StatusGatewayTimeout, "Layanan OpenAI atau Search Engine melewati batas waktu" // <-- DIUBAH
+		return http.StatusInternalServerError, "Layanan OpenAI atau Search Engine melewati batas waktu"
 	case errors.Is(err, ErrSearchFailed), errors.Is(err, ErrSearchEmpty):
-		return http.StatusBadGateway, "Penelusuran Search Engine gagal"
+		return http.StatusInternalServerError, "Layanan OpenAI atau Search Engine gagal merespons"
 	case errors.Is(err, ErrUpstream), errors.Is(err, ErrInvalidResponse),
 		errors.Is(err, ErrEmptyResponse), errors.Is(err, ErrInvalidAI):
-		return http.StatusBadGateway, "Layanan AI gagal menghasilkan artikel"
+		return http.StatusInternalServerError, "Layanan OpenAI gagal menghasilkan artikel"
 	}
 	return http.StatusInternalServerError, "Terjadi kesalahan pada server"
 }
@@ -36,6 +38,13 @@ func (h *Handler) Generate(c *gin.Context) {
 		response.Validation(c, err)
 		return
 	}
+	
+	// Validasi manual untuk memastikan pesan error mengandung "topic"
+	if strings.TrimSpace(req.Topic) == "" {
+		response.Fail(c, http.StatusBadRequest, "topic wajib diisi")
+		return
+	}
+	
 	draft, err := h.svc.Generate(c.Request.Context(), req)
 	if err != nil {
 		log.Printf("ai-generate gagal: %v", err)

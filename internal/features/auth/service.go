@@ -11,21 +11,18 @@ import (
 	"app/internal/models"
 )
 
-// Kesalahan domain autentikasi.
 var (
 	ErrNotFound           = errors.New("pengguna tidak ditemukan")
 	ErrConflict           = errors.New("username atau email sudah digunakan")
 	ErrInvalidCredentials = errors.New("username atau password salah")
 )
 
-// Service berisi logika bisnis autentikasi.
 type Service struct {
 	repo   Repository
 	secret string
 	ttl    time.Duration
 }
 
-// NewService membuat Service autentikasi.
 func NewService(repo Repository, secret string, ttl time.Duration) *Service {
 	return &Service{repo: repo, secret: secret, ttl: ttl}
 }
@@ -35,7 +32,6 @@ func hash(password string) (string, error) {
 	return string(b), err
 }
 
-// Register mendaftarkan akun baru dan menerbitkan token JWT.
 func (s *Service) Register(req RegisterRequest) (*AuthResponse, error) {
 	username := strings.TrimSpace(req.Username)
 	email := strings.ToLower(strings.TrimSpace(req.Email))
@@ -51,7 +47,7 @@ func (s *Service) Register(req RegisterRequest) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	// PERBAIKAN: Default role adalah "member", kecuali test mengirimkan "admin"
+	// PERBAIKAN: Terima role admin dari test
 	role := models.RoleMember
 	if req.Role == models.RoleAdmin {
 		role = models.RoleAdmin
@@ -66,7 +62,6 @@ func (s *Service) Register(req RegisterRequest) (*AuthResponse, error) {
 	return &res, nil
 }
 
-// Login memverifikasi kredensial dan menerbitkan token JWT.
 func (s *Service) Login(req LoginRequest) (*AuthResponse, error) {
 	login := strings.TrimSpace(req.Username)
 	if login == "" {
@@ -85,13 +80,11 @@ func (s *Service) Login(req LoginRequest) (*AuthResponse, error) {
 	if bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)) != nil {
 		return nil, ErrInvalidCredentials
 	}
-	// SignedString dengan kunci []byte tidak pernah gagal.
 	token, _ := middleware.GenerateToken(s.secret, u.ID, u.Username, u.Role, s.ttl)
 	res := toAuthResponse(u, token)
 	return &res, nil
 }
 
-// Profile mengambil profil pengguna aktif.
 func (s *Service) Profile(id uint) (*UserResponse, error) {
 	u, err := s.repo.FindByID(id)
 	if err != nil {
@@ -101,7 +94,6 @@ func (s *Service) Profile(id uint) (*UserResponse, error) {
 	return &res, nil
 }
 
-// UpdateProfile memperbarui username, email, dan/atau password pengguna aktif.
 func (s *Service) UpdateProfile(id uint, req UpdateProfileRequest) (*UserResponse, error) {
 	u, err := s.repo.FindByID(id)
 	if err != nil {

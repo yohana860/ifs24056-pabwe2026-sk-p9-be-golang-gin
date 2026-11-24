@@ -15,7 +15,6 @@ type Handler struct{ svc *Service }
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
-// Pengaman: Kembalikan 0 jika middleware Auth tidak terpasang / token invalid
 func uid(c *gin.Context) uint {
 	user := middleware.CurrentUser(c)
 	if user == nil {
@@ -38,7 +37,7 @@ func fail(c *gin.Context, err error) {
 	case errors.Is(err, ErrNotFound):
 		response.Fail(c, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrForbidden):
-		response.Fail(c, http.StatusForbidden, err.Error())
+		response.Fail(c, http.StatusForbidden, err.Error()) // <-- 403
 	case errors.Is(err, ErrInvalidCover), errors.Is(err, ErrInvalidCategory):
 		response.Fail(c, http.StatusBadRequest, err.Error())
 	default:
@@ -118,7 +117,7 @@ func (h *Handler) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req PostRequest
+	var req UpdatePostRequest // <-- Gunakan DTO Update
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Validation(c, err)
 		return

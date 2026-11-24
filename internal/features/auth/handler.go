@@ -10,16 +10,14 @@ import (
 	"app/internal/response"
 )
 
-// Handler menangani endpoint /api/auth/*.
 type Handler struct{ svc *Service }
 
-// NewHandler membuat Handler autentikasi.
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 func fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrConflict):
-		response.Fail(c, http.StatusConflict, err.Error())
+		response.Fail(c, http.StatusBadRequest, err.Error()) // <-- Diubah jadi 400
 	case errors.Is(err, ErrInvalidCredentials):
 		response.Fail(c, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, ErrNotFound):
@@ -29,7 +27,6 @@ func fail(c *gin.Context, err error) {
 	}
 }
 
-// Register godoc: POST /api/auth/register
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -38,17 +35,12 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 	user, err := h.svc.Register(req)
 	if err != nil {
-		if errors.Is(err, ErrConflict) {
-			response.Fail(c, http.StatusBadRequest, err.Error())
-			return
-		}
 		fail(c, err)
 		return
 	}
 	response.Success(c, http.StatusCreated, "Registrasi berhasil", user)
 }
 
-// Login godoc: POST /api/auth/login
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -63,12 +55,10 @@ func (h *Handler) Login(c *gin.Context) {
 	response.Success(c, http.StatusOK, "Login berhasil", res)
 }
 
-// Logout godoc: POST /api/auth/logout (JWT stateless; klien menghapus token).
 func (h *Handler) Logout(c *gin.Context) {
 	response.Success(c, http.StatusOK, "Logout berhasil", nil)
 }
 
-// Profile godoc: GET /api/auth/profile
 func (h *Handler) Profile(c *gin.Context) {
 	user, err := h.svc.Profile(middleware.CurrentUser(c).UserID)
 	if err != nil {
@@ -78,7 +68,6 @@ func (h *Handler) Profile(c *gin.Context) {
 	response.Success(c, http.StatusOK, "Profil berhasil diambil", user)
 }
 
-// UpdateProfile godoc: PUT /api/auth/profile
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	var req UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

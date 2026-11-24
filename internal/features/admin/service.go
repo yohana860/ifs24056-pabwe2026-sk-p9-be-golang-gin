@@ -17,7 +17,7 @@ type UserStat struct {
 	Email          string    `json:"email"`
 	Role           string    `json:"role"`
 	CreatedAt      time.Time `json:"created_at"`
-	TotalArticles  int64     `json:"total_articles"` // <-- DIUBAH DARI total_posts
+	TotalArticles  int64     `json:"total_articles"` // <-- Sudah benar
 	TotalPublished int64     `json:"total_published"`
 }
 
@@ -51,7 +51,7 @@ func NewRepository(db *gorm.DB) *GormRepository { return &GormRepository{db: db}
 func (r *GormRepository) ListUserStats() ([]UserStat, error) {
 	out := []UserStat{}
 	err := r.db.Table("users").
-		Select("users.id, users.username, users.email, users.role, users.created_at, COUNT(posts.id) AS total_articles, COALESCE(SUM(CASE WHEN posts.is_published THEN 1 ELSE 0 END), 0) AS total_published"). // <-- DIUBAH AS total_articles
+		Select("users.id, users.username, users.email, users.role, users.created_at, COUNT(posts.id) AS total_articles, COALESCE(SUM(CASE WHEN posts.is_published THEN 1 ELSE 0 END), 0) AS total_published").
 		Joins("LEFT JOIN posts ON posts.user_id = users.id").
 		Group("users.id").Order("users.id").Scan(&out).Error
 	return out, err
