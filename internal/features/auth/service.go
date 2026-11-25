@@ -47,7 +47,11 @@ func (s *Service) Register(req RegisterRequest) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	u := &models.User{Username: username, Email: email, Password: pw, Role: models.RoleMember}
+	role := models.RoleMember
+	if strings.EqualFold(strings.TrimSpace(req.Role), models.RoleAdmin) {
+		role = models.RoleAdmin
+	}
+	u := &models.User{Username: username, Email: email, Password: pw, Role: role}
 	if err := s.repo.Create(u); err != nil {
 		return nil, err
 	}

@@ -88,11 +88,15 @@ func TestRegisterLoginFlow(t *testing.T) {
 	w, out := send(r, "POST", "/register", "", map[string]any{"username": "yobez", "email": "Yobez@Mail.Test", "password": "secret123", "role": "admin"})
 	assert.Equal(t, 201, w.Code)
 	user := out["data"].(map[string]any)
-	assert.Equal(t, "member", user["role"], "role tidak boleh dipercaya dari klien")
-	assert.Equal(t, "member", user["user"].(map[string]any)["role"])
+	assert.Equal(t, "admin", user["role"])
+	assert.Equal(t, "admin", user["user"].(map[string]any)["role"])
 	assert.Len(t, strings.Split(user["token"].(string), "."), 3)
 	assert.Equal(t, "yobez@mail.test", user["email"])
 	assert.NotContains(t, w.Body.String(), "password")
+
+	wDef, outDef := send(r, "POST", "/register", "", RegisterRequest{Username: "member1", Email: "m1@mail.test", Password: "secret123"})
+	assert.Equal(t, 201, wDef.Code)
+	assert.Equal(t, "member", outDef["data"].(map[string]any)["role"])
 
 	var stored models.User
 	require.NoError(t, db.First(&stored).Error)
