@@ -17,7 +17,7 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 func fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrConflict):
-		response.Fail(c, http.StatusBadRequest, err.Error()) // <-- Diubah jadi 400
+		response.Fail(c, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrInvalidCredentials):
 		response.Fail(c, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, ErrNotFound):
@@ -35,6 +35,10 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 	user, err := h.svc.Register(req)
 	if err != nil {
+		if errors.Is(err, ErrConflict) {
+			response.Fail(c, http.StatusBadRequest, err.Error())
+			return
+		}
 		fail(c, err)
 		return
 	}

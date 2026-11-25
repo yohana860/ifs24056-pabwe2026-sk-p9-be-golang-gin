@@ -88,9 +88,9 @@ func TestRegisterLoginFlow(t *testing.T) {
 	w, out := send(r, "POST", "/register", "", map[string]any{"username": "yobez", "email": "Yobez@Mail.Test", "password": "secret123", "role": "admin"})
 	assert.Equal(t, 201, w.Code)
 	user := out["data"].(map[string]any)
-
-	// Role admin diterima dari klien
-	assert.Equal(t, "admin", user["role"], "role admin harus diterima")
+	assert.Equal(t, "member", user["role"], "role tidak boleh dipercaya dari klien")
+	assert.Equal(t, "member", user["user"].(map[string]any)["role"])
+	assert.Len(t, strings.Split(user["token"].(string), "."), 3)
 	assert.Equal(t, "yobez@mail.test", user["email"])
 	assert.NotContains(t, w.Body.String(), "password")
 
@@ -106,7 +106,11 @@ func TestRegisterLoginFlow(t *testing.T) {
 	token := login(t, r, "yobez")
 	assert.NotEmpty(t, token)
 	assert.NotEmpty(t, login(t, r, "yobez@mail.test"), "login dengan email")
+	w, _ = send(r, "POST", "/login", "", LoginRequest{Email: "Yobez@Mail.Test", Password: "secret123"})
+	assert.Equal(t, 200, w.Code, "login dengan field email case-insensitive")
 
+	w, _ = send(r, "POST", "/login", "", LoginRequest{Password: "secret123"})
+	assert.Equal(t, 401, w.Code, "login tanpa username/email ditolak")
 	w, _ = send(r, "POST", "/login", "", LoginRequest{Username: "yobez", Password: "salah"})
 	assert.Equal(t, 401, w.Code)
 	w, _ = send(r, "POST", "/login", "", LoginRequest{Username: "tidakada", Password: "secret123"})
@@ -138,7 +142,7 @@ func TestProfile(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 
 	w, _ = send(r, "PUT", "/profile", token, UpdateProfileRequest{Username: "bob"})
-	assert.Equal(t, 400, w.Code)
+	assert.Equal(t, 409, w.Code)
 	w, _ = send(r, "PUT", "/profile", token, `{"email":"bukan-email"}`)
 	assert.Equal(t, 400, w.Code)
 	w, _ = send(r, "PUT", "/profile", token, UpdateProfileRequest{})
@@ -224,7 +228,7 @@ func TestServiceErrorBranches(t *testing.T) {
 
 func TestHandlerFailMapping(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cases := map[error]int{ErrConflict: 400, ErrInvalidCredentials: 401, ErrNotFound: 404, errors.New("x"): 500}
+	cases := map[error]int{ErrConflict: 409, ErrInvalidCredentials: 401, ErrNotFound: 404, errors.New("x"): 500}
 	for err, code := range cases {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)

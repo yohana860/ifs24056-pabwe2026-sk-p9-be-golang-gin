@@ -59,6 +59,9 @@ func Seed(db *gorm.DB, cfg *config.Config) error {
 			return err
 		}
 		if count > 0 {
+			if s.username == "member" {
+				_ = db.Model(&models.User{}).Where("username = ? AND role <> ?", s.username, s.role).Update("role", s.role).Error
+			}
 			continue
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(s.password), bcrypt.DefaultCost)

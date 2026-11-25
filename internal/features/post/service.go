@@ -10,8 +10,12 @@ import (
 	"app/internal/models"
 )
 
-var ErrInvalidCover = errors.New("cover_image_path harus berupa URL http(s) atau path yang diawali /")
-var ErrInvalidCategory = errors.New("kategori tidak valid")
+var (
+	ErrInvalidCover    = errors.New("cover_image_path harus berupa URL http(s) atau path yang diawali /")
+	ErrInvalidCategory = errors.New("kategori tidak valid")
+	ErrInvalidTitle    = errors.New("judul wajib diisi")
+	ErrInvalidContent  = errors.New("konten wajib diisi")
+)
 
 type Service struct {
 	repo Repository
@@ -57,11 +61,14 @@ func validCover(c string) bool {
 		(strings.HasPrefix(c, "/") && !strings.HasPrefix(c, "//"))
 }
 
-func toResponse(p *models.Post, withContent bool) PostResponse {
+func toResponse(p *models.Post, withContent, includeInternal bool) PostResponse {
 	res := PostResponse{
-		ID: p.ID, UserID: p.UserID, Title: p.Title, Slug: p.Slug, Category: p.Category, Excerpt: p.Excerpt,
+		ID: p.ID, Title: p.Title, Slug: p.Slug, Category: p.Category, Excerpt: p.Excerpt,
 		CoverImagePath: p.CoverImagePath, IsPublished: p.IsPublished, PublishedAt: p.PublishedAt,
 		ReadingTime: readingTime(p.Content), CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+	}
+	if includeInternal {
+		res.UserID = p.UserID
 	}
 	if withContent {
 		res.Content = p.Content
@@ -73,10 +80,10 @@ func toResponse(p *models.Post, withContent bool) PostResponse {
 	return res
 }
 
-func toList(posts []models.Post) []PostResponse {
+func toList(posts []models.Post, includeInternal bool) []PostResponse {
 	out := make([]PostResponse, 0, len(posts))
 	for i := range posts {
-		out = append(out, toResponse(&posts[i], false))
+		out = append(out, toResponse(&posts[i], false, includeInternal))
 	}
 	return out
 }
@@ -90,11 +97,7 @@ func (s *Service) ListPublic(f Filter) ([]PostResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := toList(posts)
-	for i := range out {
-		out[i].UserID = 0 // data internal: jangan tampil di API publik
-	}
-	return out, nil
+	return toList(posts, false), nil
 }
 
 func (s *Service) GetPublic(slug string) (*PostResponse, error) {
@@ -102,8 +105,7 @@ func (s *Service) GetPublic(slug string) (*PostResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := toResponse(p, true)
-	res.UserID = 0 // data internal: jangan tampil di API publik
+	res := toResponse(p, true, false)
 	return &res, nil
 }
 
@@ -112,7 +114,7 @@ func (s *Service) ListMine(userID uint) ([]PostResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toList(posts), nil
+	return toList(posts, true), nil
 }
 
 func (s *Service) GetMine(userID, id uint) (*PostResponse, error) {
@@ -120,7 +122,7 @@ func (s *Service) GetMine(userID, id uint) (*PostResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := toResponse(p, true)
+	res := toResponse(p, true, true)
 	return &res, nil
 }
 
@@ -141,6 +143,13 @@ func (s *Service) uniqueSlug(title string) (string, error) {
 }
 
 func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrInvalidTitle
+	}
+	if strings.TrimSpace(req.Content) == "" {
+		return nil, ErrInvalidContent
+	}
 	if !validCover(req.CoverImagePath) {
 		return nil, ErrInvalidCover
 	}
@@ -151,13 +160,13 @@ func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	if !slices.Contains(models.Categories, category) {
 		return nil, ErrInvalidCategory
 	}
-	slug, err := s.uniqueSlug(req.Title)
+	slug, err := s.uniqueSlug(title)
 	if err != nil {
 		return nil, err
 	}
 
 	p := &models.Post{
-		UserID: userID, Title: strings.TrimSpace(req.Title), Slug: slug, Category: category,
+		UserID: userID, Title: title, Slug: slug, Category: category,
 		Excerpt: req.Excerpt, Content: req.Content, CoverImagePath: req.CoverImagePath,
 		IsPublished: req.IsPublished,
 	}
@@ -170,23 +179,22 @@ func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	if err := s.repo.Create(p); err != nil {
 		return nil, err
 	}
-	res := toResponse(p, true)
+	res := toResponse(p, true, true)
 	return &res, nil
 }
 
 func (s *Service) Update(userID, id uint, req UpdatePostRequest) (*PostResponse, error) {
-	if !validCover(req.CoverImagePath) {
-		return nil, ErrInvalidCover
-	}
-
 	p, err := s.repo.FindOwned(userID, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update parsial (hanya ubah jika field tidak kosong)
-	if req.Title != "" {
-		p.Title = strings.TrimSpace(req.Title)
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			return nil, ErrInvalidTitle
+		}
+		p.Title = title
 	}
 	if req.Category != "" {
 		category := strings.TrimSpace(req.Category)
@@ -195,14 +203,20 @@ func (s *Service) Update(userID, id uint, req UpdatePostRequest) (*PostResponse,
 		}
 		p.Category = category
 	}
-	if req.Excerpt != "" {
-		p.Excerpt = req.Excerpt
+	if req.Excerpt != nil {
+		p.Excerpt = *req.Excerpt
 	}
-	if req.Content != "" {
-		p.Content = req.Content
+	if req.Content != nil {
+		if strings.TrimSpace(*req.Content) == "" {
+			return nil, ErrInvalidContent
+		}
+		p.Content = *req.Content
 	}
-	if req.CoverImagePath != "" {
-		p.CoverImagePath = req.CoverImagePath
+	if req.CoverImagePath != nil {
+		if !validCover(*req.CoverImagePath) {
+			return nil, ErrInvalidCover
+		}
+		p.CoverImagePath = *req.CoverImagePath
 	}
 	if req.IsPublished != nil {
 		p.IsPublished = *req.IsPublished
@@ -217,7 +231,7 @@ func (s *Service) Update(userID, id uint, req UpdatePostRequest) (*PostResponse,
 	if err := s.repo.Save(p); err != nil {
 		return nil, err
 	}
-	res := toResponse(p, true)
+	res := toResponse(p, true, true)
 	return &res, nil
 }
 
@@ -235,7 +249,7 @@ func (s *Service) TogglePublish(userID, id uint) (*PostResponse, error) {
 	if err := s.repo.Save(p); err != nil {
 		return nil, err
 	}
-	res := toResponse(p, true)
+	res := toResponse(p, true, true)
 	return &res, nil
 }
 

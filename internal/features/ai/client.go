@@ -77,7 +77,11 @@ func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 		return "", ErrNotConfigured
 	}
 	body, _ := json.Marshal(chatRequest{Model: c.model, Messages: messages})
-	url := strings.TrimRight(c.endpoint, "/") + "/chat/completions"
+	endpoint := strings.TrimRight(c.endpoint, "/")
+	url := endpoint
+	if !strings.HasSuffix(endpoint, "/chat/completions") {
+		url = endpoint + "/chat/completions"
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return "", err

@@ -85,9 +85,10 @@ func newReq(title string) PostRequest {
 	return PostRequest{Title: title, Category: "Teknologi", Excerpt: "ringkas", Content: "isi artikel"}
 }
 
-// Helper untuk Update (payload parsial)
+func strPtr(s string) *string { return &s }
+
 func newUpdateReq(title string) UpdatePostRequest {
-	return UpdatePostRequest{Title: title, Category: "Teknologi", Excerpt: "ringkas", Content: "isi artikel"}
+	return UpdatePostRequest{Title: strPtr(title), Category: "Teknologi", Excerpt: strPtr("ringkas"), Content: strPtr("isi artikel")}
 }
 
 func TestSlugifyAndReadingTime(t *testing.T) {
@@ -125,6 +126,8 @@ func TestAuthorCRUDAndOwnership(t *testing.T) {
 
 	for _, bad := range []any{
 		`{"title":""}`,
+		PostRequest{Title: "   ", Category: "Umum", Content: "c"},
+		PostRequest{Title: "x", Category: "Umum", Content: "   "},
 		PostRequest{Title: "x", Category: "Ngawur", Content: "c"},
 		PostRequest{Title: "x", Category: "Umum"},
 		PostRequest{Title: "x", Category: "Umum", Content: "c", CoverImagePath: "javascript:alert(1)"},
@@ -162,10 +165,23 @@ func TestAuthorCRUDAndOwnership(t *testing.T) {
 	assert.Equal(t, "judul-sama", data(out)["slug"], "slug stabil")
 	code, _ = call(r, "PUT", "/posts/"+id, 1, PostRequest{Title: "x", Category: "Umum", Content: "c", CoverImagePath: "data:x"})
 	assert.Equal(t, 400, code)
-	code, _ = call(r, "PUT", "/posts/"+id, 1, UpdatePostRequest{Title: strings.Repeat("a", 300)})
+	code, _ = call(r, "PUT", "/posts/"+id, 1, UpdatePostRequest{Title: strPtr(strings.Repeat("a", 300))})
+	assert.Equal(t, 400, code)
+	code, _ = call(r, "PUT", "/posts/"+id, 1, `{"title":""}`)
+	assert.Equal(t, 400, code)
+	code, _ = call(r, "PUT", "/posts/"+id, 1, `{"content":"   "}`)
 	assert.Equal(t, 400, code)
 	code, _ = call(r, "PUT", "/posts/"+id, 1, `{"title":"Parsial Saja"}`)
 	assert.Equal(t, 200, code, "update parsial: field lain tidak wajib")
+	code, out = call(r, "PUT", "/posts/"+id, 1, `{"title":"Parsial","content":"Isi parsial","is_published":true}`)
+	assert.Equal(t, 200, code)
+	assert.Equal(t, "Parsial", data(out)["title"])
+	assert.Equal(t, true, data(out)["is_published"])
+	assert.NotNil(t, data(out)["published_at"])
+	code, out = call(r, "PUT", "/posts/"+id, 1, `{"is_published":false}`)
+	assert.Equal(t, 200, code)
+	assert.Equal(t, false, data(out)["is_published"])
+	assert.Nil(t, data(out)["published_at"])
 
 	code, _ = call(r, "DELETE", "/posts/"+id, 1, nil)
 	assert.Equal(t, 200, code)
@@ -213,12 +229,16 @@ func TestPublishFlowAndPublicVisibility(t *testing.T) {
 	d := data(out)
 	assert.EqualValues(t, 3, d["reading_time"])
 	assert.NotEmpty(t, d["content"])
+	assert.Equal(t, "penulis1", d["author_name"])
 	assert.Equal(t, "penulis1", d["author"].(map[string]any)["username"])
+	assert.Nil(t, d["user_id"], "data internal user_id tidak bocor di publik")
 	assert.NotContains(t, fmt.Sprint(out), "p1@x.co", "email penulis tidak bocor")
 
 	_, out = call(r, "GET", "/public/posts", 0, nil)
 	list := out["data"].([]any)
 	assert.Len(t, list, 2)
+	assert.Equal(t, "penulis1", list[0].(map[string]any)["author_name"])
+	assert.Nil(t, list[0].(map[string]any)["user_id"])
 	assert.Nil(t, list[0].(map[string]any)["content"], "daftar tidak membawa isi penuh")
 	_, out = call(r, "GET", "/public/posts?category=Opini", 0, nil)
 	assert.Len(t, out["data"], 1)
@@ -283,11 +303,15 @@ func TestCountSecondQueryFails(t *testing.T) {
 type wrapRepo struct {
 	Repository
 	slugErr, saveErr, createErr, countErr error
+	alwaysSlugExists                      bool
 }
 
 func (w wrapRepo) SlugExists(s string) (bool, error) {
 	if w.slugErr != nil {
 		return false, w.slugErr
+	}
+	if w.alwaysSlugExists {
+		return true, nil
 	}
 	return w.Repository.SlugExists(s)
 }
@@ -320,6 +344,8 @@ func TestServiceErrorBranches(t *testing.T) {
 
 	_, err = svc(wrapRepo{slugErr: boom}).Create(1, newReq("x"))
 	assert.ErrorIs(t, err, boom)
+	_, err = svc(wrapRepo{alwaysSlugExists: true}).Create(1, newReq("x"))
+	assert.Error(t, err)
 	_, err = svc(wrapRepo{createErr: boom}).Create(1, newReq("x"))
 	assert.ErrorIs(t, err, boom)
 
@@ -353,11 +379,19 @@ func TestHandlerServerErrors(t *testing.T) {
 }
 
 func TestDefaultCategory(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	assert.Equal(t, uint(0), uid(c))
+
 	r := engine(memDB(t))
 	code, out := call(r, "POST", "/posts", 1, PostRequest{Title: "Tanpa Kategori", Content: "konten"})
 	assert.Equal(t, 201, code)
 	assert.Equal(t, "Umum", data(out)["category"])
 	assert.Nil(t, data(out)["published_at"])
+
+	code, outPub := call(r, "POST", "/posts", 1, PostRequest{Title: "Langsung Terbit", Content: "konten", IsPublished: true})
+	assert.Equal(t, 201, code)
+	assert.Equal(t, true, data(outPub)["is_published"])
+	assert.NotNil(t, data(outPub)["published_at"])
 
 	id := fmt.Sprint(int(data(out)["id"].(float64)))
 	code, out = call(r, "PUT", "/posts/"+id, 1, PostRequest{Title: "Judul Update", Content: "konten baru", Category: ""})

@@ -103,6 +103,9 @@ func parseDraft(raw, fallbackCategory string) (*BlogDraft, error) {
 	if d.Title == "" || d.Content == "" {
 		return nil, ErrInvalidAI
 	}
+	if d.Excerpt == "" {
+		d.Excerpt = truncate(d.Content, 160)
+	}
 	if !slices.Contains(models.Categories, d.Category) {
 		d.Category = fallbackCategory
 		if d.Category == "" {

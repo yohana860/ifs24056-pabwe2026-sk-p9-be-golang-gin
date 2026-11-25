@@ -47,13 +47,7 @@ func (s *Service) Register(req RegisterRequest) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	// PERBAIKAN: Terima role admin dari test
-	role := models.RoleMember
-	if req.Role == models.RoleAdmin {
-		role = models.RoleAdmin
-	}
-
-	u := &models.User{Username: username, Email: email, Password: pw, Role: role}
+	u := &models.User{Username: username, Email: email, Password: pw, Role: models.RoleMember}
 	if err := s.repo.Create(u); err != nil {
 		return nil, err
 	}

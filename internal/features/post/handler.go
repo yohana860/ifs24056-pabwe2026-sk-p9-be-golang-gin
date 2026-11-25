@@ -38,7 +38,8 @@ func fail(c *gin.Context, err error) {
 		response.Fail(c, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrForbidden):
 		response.Fail(c, http.StatusForbidden, err.Error())
-	case errors.Is(err, ErrInvalidCover), errors.Is(err, ErrInvalidCategory):
+	case errors.Is(err, ErrInvalidCover), errors.Is(err, ErrInvalidCategory),
+		errors.Is(err, ErrInvalidTitle), errors.Is(err, ErrInvalidContent):
 		response.Fail(c, http.StatusBadRequest, err.Error())
 	default:
 		response.Error(c, http.StatusInternalServerError, "Terjadi kesalahan pada server")

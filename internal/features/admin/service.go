@@ -1,15 +1,10 @@
 package admin
 
 import (
-	"errors"
 	"time"
 
 	"gorm.io/gorm"
-
-	"app/internal/models"
 )
-
-var ErrNotFound = errors.New("pengguna tidak ditemukan")
 
 type UserStat struct {
 	ID             uint      `json:"id"`
@@ -17,12 +12,16 @@ type UserStat struct {
 	Email          string    `json:"email"`
 	Role           string    `json:"role"`
 	CreatedAt      time.Time `json:"created_at"`
-	TotalArticles  int64     `json:"total_articles"` // <-- Sudah benar
+	TotalPosts     int64     `json:"total_posts"`
+	TotalArticles  int64     `json:"total_articles"`
 	TotalPublished int64     `json:"total_published"`
+	TotalSelesai   int64     `json:"total_selesai"`
+	BelumSelesai   int64     `json:"belum_selesai"`
 }
 
 type PostRow struct {
 	ID          uint       `json:"id"`
+	UserID      uint       `json:"user_id"`
 	Title       string     `json:"title"`
 	Slug        string     `json:"slug"`
 	Category    string     `json:"category"`
@@ -31,16 +30,11 @@ type PostRow struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	AuthorID    uint       `json:"author_id"`
 	Author      string     `json:"author"`
-}
-
-type UserPosts struct {
-	User  models.User `json:"user"`
-	Posts []PostRow   `json:"posts"`
+	AuthorName  string     `json:"author_name"`
 }
 
 type Repository interface {
 	ListUserStats() ([]UserStat, error)
-	FindUser(id uint) (*models.User, error)
 	ListPosts(userID uint) ([]PostRow, error)
 }
 
@@ -53,25 +47,19 @@ func (r *GormRepository) ListUserStats() ([]UserStat, error) {
 	err := r.db.Table("users").
 		Select("users.id, users.username, users.email, users.role, users.created_at, COUNT(posts.id) AS total_articles, COALESCE(SUM(CASE WHEN posts.is_published THEN 1 ELSE 0 END), 0) AS total_published").
 		Joins("LEFT JOIN posts ON posts.user_id = users.id").
-		Group("users.id").Order("users.id").Scan(&out).Error
-	return out, err
-}
-
-func (r *GormRepository) FindUser(id uint) (*models.User, error) {
-	var u models.User
-	if err := r.db.First(&u, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
-		}
-		return nil, err
+		Group("users.id, users.username, users.email, users.role, users.created_at").Order("users.id").Scan(&out).Error
+	for i := range out {
+		out[i].TotalPosts = out[i].TotalArticles
+		out[i].TotalSelesai = out[i].TotalPublished
+		out[i].BelumSelesai = out[i].TotalArticles - out[i].TotalPublished
 	}
-	return &u, nil
+	return out, err
 }
 
 func (r *GormRepository) ListPosts(userID uint) ([]PostRow, error) {
 	out := []PostRow{}
 	q := r.db.Table("posts").
-		Select("posts.id, posts.title, posts.slug, posts.category, posts.is_published, posts.published_at, posts.created_at, posts.user_id AS author_id, users.username AS author").
+		Select("posts.id, posts.user_id, posts.title, posts.slug, posts.category, posts.is_published, posts.published_at, posts.created_at, posts.user_id AS author_id, users.username AS author, users.username AS author_name").
 		Joins("JOIN users ON users.id = posts.user_id")
 	if userID != 0 {
 		q = q.Where("posts.user_id = ?", userID)

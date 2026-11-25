@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -42,10 +43,12 @@ func TestConnectFailsWithoutServer(t *testing.T) {
 	_, err := Connect(cfg)
 	assert.Error(t, err)
 
-	cfgSQLite := &config.Config{DBConnection: "sqlite", DBDatabase: "test_sqlite"}
+	cfgSQLite := &config.Config{DBConnection: "sqlite", DBDatabase: filepath.Join(t.TempDir(), "test_sqlite")}
 	db, errSQLite := Connect(cfgSQLite)
 	assert.NoError(t, errSQLite)
 	assert.NotNil(t, db)
+	sqlDB, _ := db.DB()
+	_ = sqlDB.Close()
 }
 
 func TestSeed(t *testing.T) {

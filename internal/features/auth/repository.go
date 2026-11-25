@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -42,7 +43,7 @@ func (r *GormRepository) FindByID(id uint) (*models.User, error) {
 
 func (r *GormRepository) FindByLogin(login string) (*models.User, error) {
 	var u models.User
-	if err := r.db.Where("username = ? OR email = ?", login, login).First(&u).Error; err != nil {
+	if err := r.db.Where("username = ? OR email = ?", login, strings.ToLower(login)).First(&u).Error; err != nil {
 		return nil, mapErr(err)
 	}
 	return &u, nil

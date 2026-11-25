@@ -80,7 +80,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB, chat ai.ChatClient, search ai.Se
 	api.GET("/auth/profile", needAuth, authH.Profile)
 	api.PUT("/auth/profile", needAuth, authH.UpdateProfile)
 
-	posts := api.Group("/posts", needAuth, middleware.RequireRole(models.RoleMember, models.RoleAdmin))
+	posts := api.Group("/posts", needAuth, middleware.RequireRole(models.RoleMember, models.RoleAuthor))
 	posts.GET("", postH.ListMine)
 	posts.POST("", postH.Create)
 	posts.GET("/stats", postH.Stats)

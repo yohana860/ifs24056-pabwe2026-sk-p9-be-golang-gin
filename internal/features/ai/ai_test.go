@@ -73,6 +73,12 @@ func TestClientChat(t *testing.T) {
 	raw, _ := io.ReadAll(d.last.Body)
 	require.NoError(t, json.Unmarshal(raw, &sent))
 	assert.Equal(t, "model-x", sent.Model)
+
+	d = &fakeDoer{status: 200, body: completion("halo2")}
+	out, err = NewClient("http://x/v1/chat/completions", "rahasia", "model-x", d).Chat(ctx, msgs)
+	require.NoError(t, err)
+	assert.Equal(t, "halo2", out)
+	assert.Equal(t, "http://x/v1/chat/completions", d.last.URL.String())
 }
 
 func TestNewClientDefaultHTTPClient(t *testing.T) {
@@ -201,7 +207,7 @@ func TestServiceGenerateErrors(t *testing.T) {
 	req := GenerateRequest{Topic: "Go"}
 	src := []SearchResult{{Title: "a", URL: "https://a.test"}}
 
-	// Search Engine gagal -> tetap membuat artikel tanpa sumber (searched=false).
+	// Jika search gagal (bukan deadline), tetap lanjut membuat draf dengan searched=false.
 	d, err := NewService(&fakeChat{out: goodDraft}, &fakeSearch{err: ErrSearchFailed}).Generate(ctx, req)
 	require.NoError(t, err)
 	assert.False(t, d.Searched)
@@ -278,6 +284,9 @@ func TestHandlerGenerate(t *testing.T) {
 
 	code, _ = post(&fakeChat{}, src, `{"topic":"x"}`)
 	assert.Equal(t, 400, code)
+	code, out = post(&fakeChat{}, src, `{"topic":"   "}`)
+	assert.Equal(t, 400, code)
+	assert.Contains(t, out["message"], "topic")
 	code, _ = post(&fakeChat{}, src, `{"topic":"Belajar Go","category":"Ngawur"}`)
 	assert.Equal(t, 400, code)
 	code, out = post(&fakeChat{out: "sampah"}, src, `{"topic":"Belajar Go"}`)

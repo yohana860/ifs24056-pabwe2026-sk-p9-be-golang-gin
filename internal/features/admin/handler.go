@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -16,11 +15,7 @@ type Handler struct{ svc *Service }
 // NewHandler membuat Handler admin.
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
-func fail(c *gin.Context, err error) {
-	if errors.Is(err, ErrNotFound) {
-		response.Fail(c, http.StatusNotFound, err.Error())
-		return
-	}
+func fail(c *gin.Context, _ error) {
 	response.Error(c, http.StatusInternalServerError, "Terjadi kesalahan pada server")
 }
 

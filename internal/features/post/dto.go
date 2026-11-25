@@ -12,14 +12,14 @@ type PostRequest struct {
 	IsPublished    bool   `json:"is_published"`
 }
 
-// UpdatePostRequest adalah payload update artikel (field kosong tidak wajib diisi).
+// UpdatePostRequest adalah payload update artikel (field yang tidak dikirim tidak diubah).
 type UpdatePostRequest struct {
-	Title          string `json:"title" binding:"omitempty,max=255"`
-	Category       string `json:"category"`
-	Excerpt        string `json:"excerpt" binding:"max=500"`
-	Content        string `json:"content"`
-	CoverImagePath string `json:"cover_image_path" binding:"max=2048"`
-	IsPublished    *bool  `json:"is_published"`
+	Title          *string `json:"title" binding:"omitempty,max=255"`
+	Category       string  `json:"category"`
+	Excerpt        *string `json:"excerpt" binding:"omitempty,max=500"`
+	Content        *string `json:"content"`
+	CoverImagePath *string `json:"cover_image_path" binding:"omitempty,max=2048"`
+	IsPublished    *bool   `json:"is_published"`
 }
 
 type Author struct {

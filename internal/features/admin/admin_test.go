@@ -61,9 +61,11 @@ func TestMonitoring(t *testing.T) {
 	require.Len(t, users, 2)
 	b := users[1].(map[string]any)
 	
-	// PERBAIKAN: total_posts menjadi total_articles
 	assert.EqualValues(t, 3, b["total_articles"])
+	assert.EqualValues(t, 3, b["total_posts"])
 	assert.EqualValues(t, 2, b["total_published"])
+	assert.EqualValues(t, 2, b["total_selesai"])
+	assert.EqualValues(t, 1, b["belum_selesai"])
 	assert.EqualValues(t, 0, users[0].(map[string]any)["total_articles"])
 	assert.NotContains(t, fmt.Sprint(out), "password")
 
@@ -72,6 +74,8 @@ func TestMonitoring(t *testing.T) {
 	posts := out["data"].([]any)
 	require.Len(t, posts, 3)
 	assert.Equal(t, "b", posts[0].(map[string]any)["author"])
+	assert.Equal(t, "b", posts[0].(map[string]any)["author_name"])
+	assert.EqualValues(t, 2, posts[0].(map[string]any)["user_id"])
 	assert.NotContains(t, fmt.Sprint(out), "content")
 
 	code, out = get(r, "/users/2/posts")
@@ -100,11 +104,14 @@ func TestErrorsOnClosedDB(t *testing.T) {
 
 type stubRepo struct{ postsErr error }
 
-func (s stubRepo) ListUserStats() ([]UserStat, error)  { return nil, nil }
-func (s stubRepo) FindUser(uint) (*models.User, error) { return &models.User{}, nil }
-func (s stubRepo) ListPosts(uint) ([]PostRow, error)   { return nil, s.postsErr }
+func (s stubRepo) ListUserStats() ([]UserStat, error) { return nil, nil }
+func (s stubRepo) ListPosts(uint) ([]PostRow, error)  { return nil, s.postsErr }
 
 func TestServicePostsError(t *testing.T) {
 	_, err := NewService(stubRepo{postsErr: errors.New("x")}).ListUserPosts(1)
 	assert.Error(t, err)
+	posts, err := NewService(stubRepo{}).ListUserPosts(1)
+	require.NoError(t, err)
+	assert.NotNil(t, posts)
+	assert.Empty(t, posts)
 }
