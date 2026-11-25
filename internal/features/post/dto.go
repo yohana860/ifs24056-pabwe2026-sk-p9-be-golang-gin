@@ -29,7 +29,7 @@ type Author struct {
 
 type PostResponse struct {
 	ID             uint       `json:"id"`
-	UserID         uint       `json:"user_id"`     // <-- TAMBAHAN UNTUK TEST
+	UserID         uint       `json:"user_id,omitempty"`
 	Title          string     `json:"title"`
 	Slug           string     `json:"slug"`
 	Category       string     `json:"category"`
@@ -39,7 +39,7 @@ type PostResponse struct {
 	IsPublished    bool       `json:"is_published"`
 	PublishedAt    *time.Time `json:"published_at"`
 	ReadingTime    int        `json:"reading_time"`
-	AuthorName     string     `json:"author_name"` // <-- TAMBAHAN UNTUK TEST
+	AuthorName     string     `json:"author_name"`
 	Author         *Author    `json:"author,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`

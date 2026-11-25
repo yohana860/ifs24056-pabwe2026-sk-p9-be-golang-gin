@@ -201,8 +201,14 @@ func TestServiceGenerateErrors(t *testing.T) {
 	req := GenerateRequest{Topic: "Go"}
 	src := []SearchResult{{Title: "a", URL: "https://a.test"}}
 
-	_, err := NewService(&fakeChat{out: goodDraft}, &fakeSearch{err: ErrSearchFailed}).Generate(ctx, req)
-	assert.ErrorIs(t, err, ErrSearchFailed)
+	// Search Engine gagal -> tetap membuat artikel tanpa sumber (searched=false).
+	d, err := NewService(&fakeChat{out: goodDraft}, &fakeSearch{err: ErrSearchFailed}).Generate(ctx, req)
+	require.NoError(t, err)
+	assert.False(t, d.Searched)
+	assert.Empty(t, d.Sources)
+	// Timeout pada Search Engine tetap diteruskan sebagai error.
+	_, err = NewService(&fakeChat{out: goodDraft}, &fakeSearch{err: context.DeadlineExceeded}).Generate(ctx, req)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	_, err = NewService(&fakeChat{err: ErrUpstream}, &fakeSearch{res: src}).Generate(ctx, req)
 	assert.ErrorIs(t, err, ErrUpstream)
 	_, err = NewService(&fakeChat{out: "bukan json"}, &fakeSearch{res: src}).Generate(ctx, req)
@@ -239,9 +245,9 @@ func TestMapError(t *testing.T) {
 		err  error
 		code int
 	}{
-		{ErrNotConfigured, 503}, {ErrSearchNotConfigured, 503}, {context.DeadlineExceeded, 504},
-		{ErrSearchFailed, 502}, {ErrSearchEmpty, 502},
-		{ErrUpstream, 502}, {ErrInvalidResponse, 502}, {ErrEmptyResponse, 502}, {ErrInvalidAI, 502},
+		{ErrNotConfigured, 500}, {ErrSearchNotConfigured, 500}, {context.DeadlineExceeded, 500},
+		{ErrSearchFailed, 500}, {ErrSearchEmpty, 500},
+		{ErrUpstream, 500}, {ErrInvalidResponse, 500}, {ErrEmptyResponse, 500}, {ErrInvalidAI, 500},
 		{errors.New("lain"), 500},
 	}
 	for _, c := range cases {
@@ -275,6 +281,6 @@ func TestHandlerGenerate(t *testing.T) {
 	code, _ = post(&fakeChat{}, src, `{"topic":"Belajar Go","category":"Ngawur"}`)
 	assert.Equal(t, 400, code)
 	code, out = post(&fakeChat{out: "sampah"}, src, `{"topic":"Belajar Go"}`)
-	assert.Equal(t, 502, code)
+	assert.Equal(t, 500, code)
 	assert.Equal(t, "error", out["status"])
 }

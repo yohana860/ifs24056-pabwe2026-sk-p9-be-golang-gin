@@ -67,7 +67,7 @@ func toResponse(p *models.Post, withContent bool) PostResponse {
 		res.Content = p.Content
 	}
 	if p.User != nil {
-		res.AuthorName = p.User.Username // <-- PENTING UNTUK TEST PUBLIC
+		res.AuthorName = p.User.Username
 		res.Author = &Author{ID: p.User.ID, Username: p.User.Username}
 	}
 	return res
@@ -90,7 +90,11 @@ func (s *Service) ListPublic(f Filter) ([]PostResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toList(posts), nil
+	out := toList(posts)
+	for i := range out {
+		out[i].UserID = 0 // data internal: jangan tampil di API publik
+	}
+	return out, nil
 }
 
 func (s *Service) GetPublic(slug string) (*PostResponse, error) {
@@ -99,6 +103,7 @@ func (s *Service) GetPublic(slug string) (*PostResponse, error) {
 		return nil, err
 	}
 	res := toResponse(p, true)
+	res.UserID = 0 // data internal: jangan tampil di API publik
 	return &res, nil
 }
 
@@ -122,7 +127,6 @@ func (s *Service) GetMine(userID, id uint) (*PostResponse, error) {
 func (s *Service) uniqueSlug(title string) (string, error) {
 	base := slugify(title)
 	slug := base
-	// PERBAIKAN: Batasi loop agar server tidak hang (timeout) jika ada bug
 	for i := 2; i < 1000; i++ {
 		exists, err := s.repo.SlugExists(slug)
 		if err != nil {
@@ -151,13 +155,13 @@ func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	p := &models.Post{
 		UserID: userID, Title: strings.TrimSpace(req.Title), Slug: slug, Category: category,
 		Excerpt: req.Excerpt, Content: req.Content, CoverImagePath: req.CoverImagePath,
 		IsPublished: req.IsPublished,
 	}
-	
+
 	if p.IsPublished {
 		now := s.now()
 		p.PublishedAt = &now
@@ -170,12 +174,11 @@ func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	return &res, nil
 }
 
-// PERBAIKAN: Parameter diubah menjadi UpdatePostRequest agar tidak error kompilasi
 func (s *Service) Update(userID, id uint, req UpdatePostRequest) (*PostResponse, error) {
 	if !validCover(req.CoverImagePath) {
 		return nil, ErrInvalidCover
 	}
-	
+
 	p, err := s.repo.FindOwned(userID, id)
 	if err != nil {
 		return nil, err

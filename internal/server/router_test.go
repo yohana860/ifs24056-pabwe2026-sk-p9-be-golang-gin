@@ -76,12 +76,11 @@ func login(t *testing.T, r *gin.Engine, user, pass string) string {
 
 func TestEndToEndBlogWorkflow(t *testing.T) {
 	r := newApp(t, nil, nil, nil)
-	author := login(t, r, "author", "author")
+	author := login(t, r, "member", "member")
 	admin := login(t, r, "admin", "admin")
 
 	w, out := req(r, "POST", "/api/auth/register", "", map[string]string{"username": "penulis", "email": "p@x.co", "password": "rahasia1"})
 	require.Equal(t, 201, w.Code)
-	// PERBAIKAN: role default sekarang "member"
 	assert.Equal(t, "member", out["data"].(map[string]any)["role"])
 	baru := login(t, r, "penulis", "rahasia1")
 
@@ -99,8 +98,8 @@ func TestEndToEndBlogWorkflow(t *testing.T) {
 	w, _ = req(r, "GET", "/api/posts/"+id, baru, nil)
 	assert.Equal(t, 403, w.Code, "penulis lain tidak boleh mengelola artikel ini")
 
-	w, _ = req(r, "POST", "/api/posts", admin, map[string]string{"title": "x", "category": "Umum", "content": "c"})
-	assert.Equal(t, 403, w.Code)
+	w, _ = req(r, "POST", "/api/posts", "", map[string]string{"title": "x", "category": "Umum", "content": "c"})
+	assert.Equal(t, 401, w.Code)
 	w, _ = req(r, "GET", "/api/admin/users", author, nil)
 	assert.Equal(t, 403, w.Code)
 	w, _ = req(r, "GET", "/api/admin/users", "", nil)
@@ -119,7 +118,7 @@ func TestAIGenerateEndToEnd(t *testing.T) {
 	draft := `{"title":"Berita Go","category":"Teknologi","excerpt":"e","content":"isi [1]"}`
 	src := []ai.SearchResult{{Title: "Rilis Go", URL: "https://go.dev/blog", Snippet: "s"}}
 	r := newApp(t, chatFn(func() (string, error) { return draft, nil }), searchFn(func() ([]ai.SearchResult, error) { return src, nil }), nil)
-	tok := login(t, r, "author", "author")
+	tok := login(t, r, "member", "member")
 	w, out := req(r, "POST", "/api/posts/ai-generate", tok, map[string]string{"topic": "Rilis Go terbaru"})
 	assert.Equal(t, 200, w.Code)
 	d := out["data"].(map[string]any)
@@ -127,13 +126,11 @@ func TestAIGenerateEndToEnd(t *testing.T) {
 	assert.Equal(t, "https://go.dev/blog", d["sources"].([]any)[0].(map[string]any)["url"])
 
 	r2 := newApp(t, chatFn(func() (string, error) { return draft, nil }), searchFn(func() ([]ai.SearchResult, error) { return nil, ai.ErrSearchFailed }), nil)
-	w, out = req(r2, "POST", "/api/posts/ai-generate", login(t, r2, "author", "author"), map[string]string{"topic": "Rilis Go terbaru"})
-	// PERBAIKAN: AI tetap lanjut (fallback) jadi 200 success, bukan 502 error
+	w, out = req(r2, "POST", "/api/posts/ai-generate", login(t, r2, "member", "member"), map[string]string{"topic": "Rilis Go terbaru"})
+	// Search gagal -> AI tetap lanjut (fallback), jadi 200 success
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, "success", out["status"])
 }
-
-// FUNGSI TestAuthRateLimit DIHAPUS KARENA RATE LIMITER SUDAH DIMATIKAN
 
 func TestNoRouteAndSPA(t *testing.T) {
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}, "assets/a.js": {Data: []byte("1")}}

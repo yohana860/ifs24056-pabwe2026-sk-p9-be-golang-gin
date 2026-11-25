@@ -85,7 +85,7 @@ func newReq(title string) PostRequest {
 	return PostRequest{Title: title, Category: "Teknologi", Excerpt: "ringkas", Content: "isi artikel"}
 }
 
-// TAMBAHAN: Helper untuk Update agar tidak error kompilasi
+// Helper untuk Update (payload parsial)
 func newUpdateReq(title string) UpdatePostRequest {
 	return UpdatePostRequest{Title: title, Category: "Teknologi", Excerpt: "ringkas", Content: "isi artikel"}
 }
@@ -162,8 +162,10 @@ func TestAuthorCRUDAndOwnership(t *testing.T) {
 	assert.Equal(t, "judul-sama", data(out)["slug"], "slug stabil")
 	code, _ = call(r, "PUT", "/posts/"+id, 1, PostRequest{Title: "x", Category: "Umum", Content: "c", CoverImagePath: "data:x"})
 	assert.Equal(t, 400, code)
-	code, _ = call(r, "PUT", "/posts/"+id, 1, `{"title":""}`)
+	code, _ = call(r, "PUT", "/posts/"+id, 1, UpdatePostRequest{Title: strings.Repeat("a", 300)})
 	assert.Equal(t, 400, code)
+	code, _ = call(r, "PUT", "/posts/"+id, 1, `{"title":"Parsial Saja"}`)
+	assert.Equal(t, 200, code, "update parsial: field lain tidak wajib")
 
 	code, _ = call(r, "DELETE", "/posts/"+id, 1, nil)
 	assert.Equal(t, 200, code)
@@ -320,13 +322,12 @@ func TestServiceErrorBranches(t *testing.T) {
 	assert.ErrorIs(t, err, boom)
 	_, err = svc(wrapRepo{createErr: boom}).Create(1, newReq("x"))
 	assert.ErrorIs(t, err, boom)
-	
-	// PERBAIKAN: Menggunakan newUpdateReq
+
 	_, err = svc(wrapRepo{saveErr: boom}).Update(1, 1, newUpdateReq("x"))
 	assert.ErrorIs(t, err, boom)
 	_, err = svc(wrapRepo{}).Update(1, 99, newUpdateReq("x"))
 	assert.ErrorIs(t, err, ErrNotFound)
-	
+
 	_, err = svc(wrapRepo{saveErr: boom}).TogglePublish(1, 1)
 	assert.ErrorIs(t, err, boom)
 	_, err = svc(wrapRepo{countErr: boom}).Stats(1)
