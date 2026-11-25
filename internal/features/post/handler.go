@@ -37,7 +37,7 @@ func fail(c *gin.Context, err error) {
 	case errors.Is(err, ErrNotFound):
 		response.Fail(c, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrForbidden):
-		response.Fail(c, http.StatusForbidden, err.Error()) // <-- 403
+		response.Fail(c, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrInvalidCover), errors.Is(err, ErrInvalidCategory):
 		response.Fail(c, http.StatusBadRequest, err.Error())
 	default:
@@ -117,7 +117,7 @@ func (h *Handler) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req UpdatePostRequest // <-- Gunakan DTO Update
+	var req UpdatePostRequest // <-- INI YANG BENAR
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Validation(c, err)
 		return

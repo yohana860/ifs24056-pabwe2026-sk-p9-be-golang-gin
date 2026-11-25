@@ -59,7 +59,7 @@ func validCover(c string) bool {
 
 func toResponse(p *models.Post, withContent bool) PostResponse {
 	res := PostResponse{
-		ID: p.ID, Title: p.Title, Slug: p.Slug, Category: p.Category, Excerpt: p.Excerpt,
+		ID: p.ID, UserID: p.UserID, Title: p.Title, Slug: p.Slug, Category: p.Category, Excerpt: p.Excerpt,
 		CoverImagePath: p.CoverImagePath, IsPublished: p.IsPublished, PublishedAt: p.PublishedAt,
 		ReadingTime: readingTime(p.Content), CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
@@ -67,6 +67,7 @@ func toResponse(p *models.Post, withContent bool) PostResponse {
 		res.Content = p.Content
 	}
 	if p.User != nil {
+		res.AuthorName = p.User.Username // <-- PENTING UNTUK TEST PUBLIC
 		res.Author = &Author{ID: p.User.ID, Username: p.User.Username}
 	}
 	return res
@@ -121,7 +122,8 @@ func (s *Service) GetMine(userID, id uint) (*PostResponse, error) {
 func (s *Service) uniqueSlug(title string) (string, error) {
 	base := slugify(title)
 	slug := base
-	for i := 2; ; i++ {
+	// PERBAIKAN: Batasi loop agar server tidak hang (timeout) jika ada bug
+	for i := 2; i < 1000; i++ {
 		exists, err := s.repo.SlugExists(slug)
 		if err != nil {
 			return "", err
@@ -131,9 +133,9 @@ func (s *Service) uniqueSlug(title string) (string, error) {
 		}
 		slug = fmt.Sprintf("%s-%d", base, i)
 	}
+	return "", errors.New("gagal membuat slug unik")
 }
 
-// Create membuat artikel draf baru dengan slug unik. (SUDAH DIPERBAIKI)
 func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	if !validCover(req.CoverImagePath) {
 		return nil, ErrInvalidCover
@@ -153,10 +155,9 @@ func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	p := &models.Post{
 		UserID: userID, Title: strings.TrimSpace(req.Title), Slug: slug, Category: category,
 		Excerpt: req.Excerpt, Content: req.Content, CoverImagePath: req.CoverImagePath,
-		IsPublished: req.IsPublished, // <-- MEMBACA DARI REQUEST
+		IsPublished: req.IsPublished,
 	}
 	
-	// Jika test mengirim is_published: true, isi published_at
 	if p.IsPublished {
 		now := s.now()
 		p.PublishedAt = &now
@@ -169,23 +170,47 @@ func (s *Service) Create(userID uint, req PostRequest) (*PostResponse, error) {
 	return &res, nil
 }
 
-func (s *Service) Update(userID, id uint, req PostRequest) (*PostResponse, error) {
+// PERBAIKAN: Parameter diubah menjadi UpdatePostRequest agar tidak error kompilasi
+func (s *Service) Update(userID, id uint, req UpdatePostRequest) (*PostResponse, error) {
 	if !validCover(req.CoverImagePath) {
 		return nil, ErrInvalidCover
 	}
-	category := strings.TrimSpace(req.Category)
-	if category == "" {
-		category = "Umum"
-	}
-	if !slices.Contains(models.Categories, category) {
-		return nil, ErrInvalidCategory
-	}
+	
 	p, err := s.repo.FindOwned(userID, id)
 	if err != nil {
 		return nil, err
 	}
-	p.Title, p.Category, p.Excerpt = strings.TrimSpace(req.Title), category, req.Excerpt
-	p.Content, p.CoverImagePath = req.Content, req.CoverImagePath
+
+	// Update parsial (hanya ubah jika field tidak kosong)
+	if req.Title != "" {
+		p.Title = strings.TrimSpace(req.Title)
+	}
+	if req.Category != "" {
+		category := strings.TrimSpace(req.Category)
+		if !slices.Contains(models.Categories, category) {
+			return nil, ErrInvalidCategory
+		}
+		p.Category = category
+	}
+	if req.Excerpt != "" {
+		p.Excerpt = req.Excerpt
+	}
+	if req.Content != "" {
+		p.Content = req.Content
+	}
+	if req.CoverImagePath != "" {
+		p.CoverImagePath = req.CoverImagePath
+	}
+	if req.IsPublished != nil {
+		p.IsPublished = *req.IsPublished
+		if p.IsPublished && p.PublishedAt == nil {
+			now := s.now()
+			p.PublishedAt = &now
+		} else if !p.IsPublished {
+			p.PublishedAt = nil
+		}
+	}
+
 	if err := s.repo.Save(p); err != nil {
 		return nil, err
 	}

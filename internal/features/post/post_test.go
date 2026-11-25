@@ -85,6 +85,11 @@ func newReq(title string) PostRequest {
 	return PostRequest{Title: title, Category: "Teknologi", Excerpt: "ringkas", Content: "isi artikel"}
 }
 
+// TAMBAHAN: Helper untuk Update agar tidak error kompilasi
+func newUpdateReq(title string) UpdatePostRequest {
+	return UpdatePostRequest{Title: title, Category: "Teknologi", Excerpt: "ringkas", Content: "isi artikel"}
+}
+
 func TestSlugifyAndReadingTime(t *testing.T) {
 	assert.Equal(t, "belajar-go-itu-asyik", slugify("  Belajar Go itu ASYIK!!  "))
 	assert.Equal(t, "artikel", slugify("日本語 !!!"))
@@ -315,10 +320,13 @@ func TestServiceErrorBranches(t *testing.T) {
 	assert.ErrorIs(t, err, boom)
 	_, err = svc(wrapRepo{createErr: boom}).Create(1, newReq("x"))
 	assert.ErrorIs(t, err, boom)
-	_, err = svc(wrapRepo{saveErr: boom}).Update(1, 1, newReq("x"))
+	
+	// PERBAIKAN: Menggunakan newUpdateReq
+	_, err = svc(wrapRepo{saveErr: boom}).Update(1, 1, newUpdateReq("x"))
 	assert.ErrorIs(t, err, boom)
-	_, err = svc(wrapRepo{}).Update(1, 99, newReq("x"))
+	_, err = svc(wrapRepo{}).Update(1, 99, newUpdateReq("x"))
 	assert.ErrorIs(t, err, ErrNotFound)
+	
 	_, err = svc(wrapRepo{saveErr: boom}).TogglePublish(1, 1)
 	assert.ErrorIs(t, err, boom)
 	_, err = svc(wrapRepo{countErr: boom}).Stats(1)
